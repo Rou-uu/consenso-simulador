@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang xml:lang>
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Simulador de consenso — perfil técnico y hardware</title>
+  <style>
+
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+
+ul.task-list[class]{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+font-size: inherit;
+width: 0.8em;
+margin: 0 0.8em 0.2em -1.6em;
+vertical-align: middle;
+}
+.display.math{display: block; text-align: center; margin: 0.5rem auto;}
+
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+  <style type="text/css">body { max-width: 50rem; margin: 2.5rem auto; padding: 0 1.5rem;
+font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1a1a1a; }
+h1 { border-bottom: 3px solid #4a5568; padding-bottom: .3em; }
+h2 { margin-top: 2.2em; border-bottom: 1px solid #ddd; padding-bottom: .2em; }
+h3 { margin-top: 1.6em; color: #2d3748; }
+table { border-collapse: collapse; width: 100%; margin: 1.2em 0; font-size: .93em; }
+th, td { border: 1px solid #cbd5e0; padding: .45em .7em; text-align: left; }
+th { background: #edf2f7; }
+tr:nth-child(even) td { background: #f7fafc; }
+code { background: #edf2f7; padding: .12em .35em; border-radius: 3px; font-size: .88em; }
+pre { background: #f7fafc; border: 1px solid #cbd5e0; border-radius: 5px; padding: .9em; overflow-x: auto; }
+pre code { background: none; padding: 0; }
+blockquote { border-left: 4px solid #4a5568; margin-left: 0; padding-left: 1em; color: #4a5568; }
+@media print { body { max-width: none; margin: 0; font-size: 11pt; } h2 { page-break-after: avoid; } table { page-break-inside: avoid; } }
+</style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Simulador de consenso — perfil técnico y hardware</h1>
+</header>
+<nav id="TOC" role="doc-toc">
+<ul>
+<li><a href="#perfil-técnico-rendimiento-y-hardware" id="toc-perfil-técnico-rendimiento-y-hardware">Perfil técnico,
+rendimiento y hardware</a>
+<ul>
+<li><a href="#qué-es-el-proyecto" id="toc-qué-es-el-proyecto">1. Qué es
+el proyecto</a></li>
+<li><a href="#perfil-de-cómputo" id="toc-perfil-de-cómputo">2. Perfil de
+cómputo</a></li>
+<li><a href="#hardware-actual" id="toc-hardware-actual">3. Hardware
+actual</a></li>
+<li><a href="#rendimiento-medido" id="toc-rendimiento-medido">4.
+Rendimiento medido</a></li>
+<li><a href="#límite-de-memoria" id="toc-límite-de-memoria">5. Límite de
+memoria</a></li>
+<li><a href="#qué-priorizar-al-comprar" id="toc-qué-priorizar-al-comprar">6. Qué priorizar al comprar</a></li>
+<li><a href="#mejoras-futuras-y-su-implementación" id="toc-mejoras-futuras-y-su-implementación">7. Mejoras futuras y su
+implementación</a></li>
+<li><a href="#resumen-para-quien-cotiza" id="toc-resumen-para-quien-cotiza">8. Resumen para quien cotiza</a></li>
+<li><a href="#lo-que-no-está-medido" id="toc-lo-que-no-está-medido">9.
+Lo que NO está medido</a></li>
+<li><a href="#cómo-reproducir-las-mediciones" id="toc-cómo-reproducir-las-mediciones">10. Cómo reproducir las
+mediciones</a></li>
+<li><a href="#nota-sobre-el-equipo-actual" id="toc-nota-sobre-el-equipo-actual">11. Nota sobre el equipo
+actual</a></li>
+</ul></li>
+</ul>
+</nav>
+<h1 id="perfil-técnico-rendimiento-y-hardware">Perfil técnico,
+rendimiento y hardware</h1>
+<p>Documento de apoyo para cotizar un equipo. Explica qué hace el
+proyecto, qué tipo de carga de cómputo genera, qué se midió en el equipo
+actual, y qué piezas importan de verdad para acelerarlo.</p>
+<p><strong>Fecha de las mediciones:</strong> 15 de agosto de 2026. Todas
+las cifras marcadas como <em>medido</em> se obtuvieron en el equipo
+descrito en la sección 3 y se pueden reproducir con los comandos de la
+sección 10.</p>
+<hr />
+<h2 id="qué-es-el-proyecto">1. Qué es el proyecto</h2>
+<p>Un <strong>simulador de propagación de consenso en redes</strong>,
+con editor visual de grafos, que corre completamente dentro del
+navegador. No hay servidor de aplicación: el HTML carga Python compilado
+a WebAssembly (Pyodide) y toda la lógica —estado, interfaz, y los
+algoritmos numéricos— está escrita en Python.</p>
+<p>El modelo: cada nodo de un grafo tiene un valor y cada arista una
+probabilidad de transmitir. Los nodos se mandan mensajes al azar y
+adoptan valores según un algoritmo de consenso. La métrica de interés es
+la <strong>discrepancia</strong>
+(<code>max(valores) − min(valores)</code>): cuando llega a 0, la red
+alcanzó consenso.</p>
+<p>Hay dos modos de uso, con perfiles de cómputo muy distintos:</p>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th></th>
+<th><strong>Editor</strong></th>
+<th><strong>Análisis de convergencia (sweep)</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Qué hace</td>
+<td>Una ronda sobre un grafo dibujado a mano</td>
+<td>Barre la probabilidad <code>p</code> de 0 a 1 y grafica la
+discrepancia media con intervalo de confianza</td>
+</tr>
+<tr>
+<td>Escala</td>
+<td>1 simulación</td>
+<td>Hasta 1001 valores de <code>p</code> × 50 000 simulaciones cada
+uno</td>
+</tr>
+<tr>
+<td>Costo</td>
+<td>Imperceptible</td>
+<td><strong>Es el que justifica comprar máquina</strong></td>
+</tr>
+</tbody>
+</table>
+<p>El resto del documento habla del <strong>sweep</strong>. El editor no
+tiene requisitos de hardware dignos de mención.</p>
+<hr />
+<h2 id="perfil-de-cómputo">2. Perfil de cómputo</h2>
+<p>Esta es la sección importante para elegir piezas, porque la carga
+<strong>no</strong> se parece a lo que la gente suele suponer.</p>
+<p>El sweep no hace álgebra lineal (no hay multiplicación de matrices,
+no usa BLAS). Lo que hace, para cada valor de <code>p</code>, es:</p>
+<ol type="1">
+<li>Generar un tensor de números aleatorios de forma
+<code>(S, n, n)</code> — <code>S</code> = simulaciones en paralelo,
+<code>n</code> = número de nodos.</li>
+<li>Compararlo contra la matriz de pesos para decidir qué aristas
+transmiten.</li>
+<li>Reducciones sobre el eje de emisores (<code>any</code>,
+<code>argmax</code>, <code>take_along_axis</code>).</li>
+</ol>
+<p>Es decir: <strong>generación masiva de aleatorios y operaciones
+elemento a elemento sobre tensores grandes</strong>. Tres consecuencias
+medidas:</p>
+<h3 id="corre-en-un-solo-hilo">2.1 Corre en un solo hilo</h3>
+<p><em>Medido:</em> la razón tiempo-de-CPU / tiempo-de-reloj es
+<strong>1.00</strong> en todas las configuraciones probadas. NumPy no
+paraleliza estas operaciones; no hay ninguna llamada a BLAS que pudiera
+repartir trabajo.</p>
+<blockquote>
+<p><strong>Hoy, comprar más núcleos no acelera absolutamente
+nada.</strong> Solo importa qué tan rápido es <em>un</em> núcleo.</p>
+</blockquote>
+<p>Esto cambia con un ajuste de software descrito en la sección 7.</p>
+<h3 id="el-65-del-tiempo-es-generar-números-aleatorios">2.2 El 65 % del
+tiempo es generar números aleatorios</h3>
+<p><em>Medido</em> (n=60, S=3000, una ronda de Flip Value):</p>
+<table>
+<thead>
+<tr>
+<th>Operación</th>
+<th>Tiempo</th>
+<th>%</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>fired * rand(S,n,n)</code> (llaves de selección)</td>
+<td>35.7 ms</td>
+<td>35.1 %</td>
+</tr>
+<tr>
+<td><code>np.random.rand(S,n,n)</code> (sorteo de aristas)</td>
+<td>30.5 ms</td>
+<td>29.9 %</td>
+</tr>
+<tr>
+<td><code>argmax(axis=1)</code></td>
+<td>26.7 ms</td>
+<td>26.2 %</td>
+</tr>
+<tr>
+<td>comparación, máscara, <code>any</code></td>
+<td>9.0 ms</td>
+<td>8.8 %</td>
+</tr>
+</tbody>
+</table>
+<p>Las dos llamadas al generador aleatorio suman <strong>65 %</strong>.
+Cualquier mejora importante pasa por ahí.</p>
+<h3 id="no-está-limitado-por-el-ancho-de-banda-de-memoria">2.3 No está
+limitado por el ancho de banda de memoria</h3>
+<p><em>Medido:</em> un núcleo alcanza ~6.9 GB/s efectivos, muy por
+debajo de lo que el chip puede mover. La evidencia de que la memoria no
+es el techo es que al repartir el trabajo entre procesos el rendimiento
+<strong>sí</strong> sube (×4, sección 7.1): si el bus estuviera saturado
+con un núcleo, paralelizar no habría servido.</p>
+<p>El ancho de banda sí empieza a pesar al agregar núcleos: la
+eficiencia del paralelismo cae de 85 % con 2 procesos a 33 % con 12.</p>
+<hr />
+<h2 id="hardware-actual">3. Hardware actual</h2>
+<p><em>Medido con <code>sysctl</code> y <code>sw_vers</code>.</em></p>
+<table>
+<thead>
+<tr>
+<th>Componente</th>
+<th>Valor</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Chip</td>
+<td>Apple M3 Pro (arm64)</td>
+</tr>
+<tr>
+<td>Núcleos</td>
+<td>12 totales: <strong>6 de rendimiento + 6 de eficiencia</strong></td>
+</tr>
+<tr>
+<td>Memoria</td>
+<td>18 GB unificada</td>
+</tr>
+<tr>
+<td>Sistema</td>
+<td>macOS 26.5.2</td>
+</tr>
+<tr>
+<td>Python</td>
+<td>3.12.12 (arm64)</td>
+</tr>
+<tr>
+<td>NumPy</td>
+<td>2.4.5, con SIMD NEON/ASIMD activo</td>
+</tr>
+</tbody>
+</table>
+<p>Es una máquina portátil de gama alta, y sirve perfectamente para
+desarrollar y para estudios chicos. Se queda corta en dos ejes
+concretos: núcleos de rendimiento (solo 6) y memoria (18 GB), ambos
+detallados abajo.</p>
+<hr />
+<h2 id="rendimiento-medido">4. Rendimiento medido</h2>
+<h3 id="rendimiento-bruto-por-núcleo">4.1 Rendimiento bruto por
+núcleo</h3>
+<p>Simulaciones-ronda por segundo, un núcleo:</p>
+<table>
+<thead>
+<tr>
+<th>n (nodos)</th>
+<th>sim-rondas / s</th>
+<th>GB/s efectivos</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>10</td>
+<td>754 000</td>
+<td>4.8</td>
+</tr>
+<tr>
+<td>30</td>
+<td>121 000</td>
+<td>6.9</td>
+</tr>
+<tr>
+<td>100</td>
+<td>10 400</td>
+<td>6.6</td>
+</tr>
+<tr>
+<td>300</td>
+<td>1 110</td>
+<td>6.4</td>
+</tr>
+<tr>
+<td>1000</td>
+<td>108</td>
+<td>6.9</td>
+</tr>
+</tbody>
+</table>
+<p>El costo crece con <strong>n²</strong> (el tensor es
+<code>S × n × n</code>): duplicar el número de nodos cuadruplica el
+trabajo.</p>
+<h3 id="tiempo-de-un-barrido-completo">4.2 Tiempo de un barrido
+completo</h3>
+<p>Configuración típica de la aplicación: 201 valores de <code>p</code>,
+5000 simulaciones por valor. Un núcleo:</p>
+<table>
+<thead>
+<tr>
+<th>n</th>
+<th>1 ronda</th>
+<th>10 rondas</th>
+<th>RAM del tensor</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>10</td>
+<td>1 s</td>
+<td>13 s</td>
+<td>&lt; 1 MB</td>
+</tr>
+<tr>
+<td>30</td>
+<td>8 s</td>
+<td>1 min</td>
+<td>1 MB</td>
+</tr>
+<tr>
+<td>100</td>
+<td>2 min</td>
+<td>16 min</td>
+<td>8 MB</td>
+</tr>
+<tr>
+<td>300</td>
+<td>15 min</td>
+<td><strong>2.5 h</strong></td>
+<td>72 MB</td>
+</tr>
+<tr>
+<td>1000</td>
+<td>2.6 h</td>
+<td><strong>1.1 días</strong></td>
+<td>800 MB</td>
+</tr>
+</tbody>
+</table>
+<h3 id="estudio-realista">4.3 Estudio realista</h3>
+<p>El caso de uso que se tiene en mente —ver cómo cambia el
+comportamiento al crecer <code>n</code>— requiere un barrido completo
+por cada valor de <code>n</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Estudio</th>
+<th>1 núcleo (hoy)</th>
+<th>Paralelizado (×4)</th>
+<th>+ float32</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>8 valores de n entre 5 y 40</td>
+<td>8 min</td>
+<td>2 min</td>
+<td>1 min</td>
+</tr>
+<tr>
+<td>8 valores de n entre 10 y 300</td>
+<td><strong>4.7 h</strong></td>
+<td>1.2 h</td>
+<td>48 min</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="límite-de-memoria">5. Límite de memoria</h2>
+<p>El tensor <code>(S, n, n)</code> en float64 domina el consumo. Tamaño
+en GB:</p>
+<table>
+<thead>
+<tr>
+<th>n</th>
+<th>S=1000</th>
+<th>S=5000</th>
+<th>S=20000</th>
+<th>S=50000</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>30</td>
+<td>0.0</td>
+<td>0.0</td>
+<td>0.1</td>
+<td>0.4</td>
+</tr>
+<tr>
+<td>100</td>
+<td>0.1</td>
+<td>0.4</td>
+<td>1.6</td>
+<td>4.0</td>
+</tr>
+<tr>
+<td>300</td>
+<td>0.7</td>
+<td>3.6</td>
+<td><strong>14.4</strong></td>
+<td><strong>36.0</strong></td>
+</tr>
+<tr>
+<td>1000</td>
+<td>8.0</td>
+<td><strong>40.0</strong></td>
+<td><strong>160</strong></td>
+<td><strong>400</strong></td>
+</tr>
+<tr>
+<td>2000</td>
+<td><strong>32.0</strong></td>
+<td><strong>160</strong></td>
+<td><strong>640</strong></td>
+<td><strong>1600</strong></td>
+</tr>
+</tbody>
+</table>
+<p>En negrita, lo que <strong>no cabe</strong> en los 18 GB actuales
+dejando espacio al sistema.</p>
+<p>Matiz importante: la aplicación divide el trabajo en iteraciones, así
+que el tensor vivo es <code>S_por_iteración × n × n</code>, no el total.
+Con los valores por omisión (5000 simulaciones en 50 iteraciones = 100
+por iteración) el consumo es modesto incluso con n=1000. La memoria se
+vuelve el límite cuando se usan pocas iteraciones con muchas
+simulaciones, o si se implementa el barrido en 2D.</p>
+<p><strong>Conclusión de memoria:</strong> 18 GB alcanzan para n ≤ 300
+con configuraciones normales. Para trabajar cómodamente con n ≥ 500, o
+para barridos en 2D, conviene 64 GB.</p>
+<hr />
+<h2 id="qué-priorizar-al-comprar">6. Qué priorizar al comprar</h2>
+<p>En orden de impacto real sobre este proyecto:</p>
+<h3 id="rendimiento-de-un-solo-núcleo-prioridad-máxima">6.1 Rendimiento
+de un solo núcleo — <strong>prioridad máxima</strong></h3>
+<p>Es lo único que acelera el código tal como está hoy. Al comparar
+procesadores, la métrica relevante es el rendimiento
+<em>mononúcleo</em>, no el número de núcleos ni el rendimiento
+multinúcleo agregado.</p>
+<h3 id="núcleos-de-rendimiento-alta-condicionada">6.2 Núcleos de
+rendimiento — <strong>alta, condicionada</strong></h3>
+<p>Solo sirven si se implementa el paralelismo (sección 7.1, ~30 líneas
+de código). Con esa mejora, la aceleración medida en el equipo actual
+fue <strong>×4</strong>, y se estancó porque solo tiene 6 núcleos
+rápidos.</p>
+<p>Advertencia: cuentan los núcleos <strong>de rendimiento</strong>. Los
+de eficiencia aportan poco; parte de la caída de eficiencia medida (de
+85 % a 33 %) se explica por ellos.</p>
+<h3 id="memoria-alta">6.3 Memoria — <strong>alta</strong></h3>
+<p>64 GB es el punto dulce. 128 GB solo si se plantean grafos de más de
+1000 nodos o barridos en 2D con muchas simulaciones.</p>
+<p>Importa también el <strong>ancho de banda</strong>, porque limita
+cuánto rinde el paralelismo: mientras más núcleos trabajen sobre
+tensores grandes, más se nota. Preferir memoria de alta frecuencia y el
+máximo número de canales que soporte la plataforma.</p>
+<h3 id="gpu-opcional-alto-techo">6.4 GPU — <strong>opcional, alto
+techo</strong></h3>
+<p>Hoy <strong>no se usa en absoluto</strong>. Pero la carga (aleatorios
+masivos + operaciones elemento a elemento + reducciones) es de las que
+mejor se trasladan a GPU. Si se implementa el camino descrito en 7.3, es
+donde está la mejora más grande posible.</p>
+<p>Si se compra pensando en eso: NVIDIA con soporte CUDA, y la VRAM
+acota <code>S × n²</code> igual que la RAM en la tabla de la sección
+5.</p>
+<p>Si no se piensa implementar, cualquier gráfica integrada sirve.</p>
+<h3 id="almacenamiento-irrelevante">6.5 Almacenamiento —
+<strong>irrelevante</strong></h3>
+<p>El proyecto no hace entrada/salida durante el cálculo. Un SSD normal
+sobra.</p>
+<hr />
+<h2 id="mejoras-futuras-y-su-implementación">7. Mejoras futuras y su
+implementación</h2>
+<p>Ordenadas por relación impacto/esfuerzo.</p>
+<h3 id="paralelizar-el-barrido-4-medido-30-líneas">7.1 Paralelizar el
+barrido — ×4 medido, ~30 líneas</h3>
+<p><strong>Qué:</strong> el bucle sobre los valores de <code>p</code> es
+<em>vergonzosamente paralelo</em>: cada punto es independiente.
+Repartirlo entre procesos con
+<code>concurrent.futures.ProcessPoolExecutor</code>.</p>
+<p><strong>Medido en el equipo actual:</strong></p>
+<table>
+<thead>
+<tr>
+<th>Procesos</th>
+<th>Aceleración</th>
+<th>Eficiencia</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2</td>
+<td>1.71×</td>
+<td>85 %</td>
+</tr>
+<tr>
+<td>4</td>
+<td>2.82×</td>
+<td>71 %</td>
+</tr>
+<tr>
+<td>6</td>
+<td>3.59×</td>
+<td>60 %</td>
+</tr>
+<tr>
+<td>8</td>
+<td>3.92×</td>
+<td>49 %</td>
+</tr>
+<tr>
+<td>10</td>
+<td><strong>4.05×</strong></td>
+<td>41 %</td>
+</tr>
+<tr>
+<td>12</td>
+<td>3.95×</td>
+<td>33 %</td>
+</tr>
+</tbody>
+</table>
+<p>Se estanca en ×4 porque hay 6 núcleos rápidos. En una máquina con más
+núcleos de rendimiento y más ancho de banda, escalaría más.</p>
+<p><strong>Dónde:</strong> el bucle
+<code>for probability_index, probability in enumerate(probabilities)</code>
+de <code>iter_sweep</code>, en
+<code>python/simulation/sweep.py</code>.</p>
+<p><strong>Salvedad:</strong> esto aplica a la ejecución
+<strong>nativa</strong> (scripts de investigación). Dentro del navegador
+habría que usar varios Web Workers, que es bastante más trabajo.</p>
+<h3 id="usar-float32-1.47-medido-cambio-pequeño">7.2 Usar float32 —
+×1.47 medido, cambio pequeño</h3>
+<p><strong>Qué:</strong> los tensores son de float64 (8 bytes). La
+simulación no necesita esa precisión: son comparaciones contra números
+aleatorios uniformes.</p>
+<p><strong>Medido:</strong> generar y comparar en float32 es
+<strong>1.47× más rápido</strong> y usa <strong>la mitad de
+memoria</strong> —lo que además duplica el <code>n</code> máximo
+alcanzable.</p>
+<p><strong>Dónde:</strong> <code>who_gets_message_batch</code> y los
+algoritmos batched en <code>python/simulation/algorithms.py</code>.</p>
+<p><strong>Salvedad:</strong> cambia los resultados numéricos (otra
+secuencia aleatoria), así que hay que regrabar la línea base del arnés
+de equivalencia y verificar que las curvas coincidan
+estadísticamente.</p>
+<h3 id="camino-gpu-mejora-potencialmente-grande-esfuerzo-medio">7.3
+Camino GPU — mejora potencialmente grande, esfuerzo medio</h3>
+<p><strong>Qué:</strong> reemplazar NumPy por CuPy (o PyTorch) en el
+motor batched. La API de CuPy es casi idéntica a la de NumPy, así que el
+motor podría soportar ambos seleccionando el módulo de arreglos.</p>
+<p><strong>Por qué encaja:</strong> el 65 % del tiempo se va generando
+aleatorios, que es justamente lo que una GPU hace masivamente en
+paralelo. El resto son operaciones elemento a elemento y reducciones,
+igual de favorables.</p>
+<p><strong>Impacto:</strong> <em>no medido</em> — no hay GPU NVIDIA en
+este equipo. Cargas de este tipo suelen mejorar entre uno y dos órdenes
+de magnitud, pero <strong>debe verificarse antes de justificar una
+compra con ese número</strong>.</p>
+<p><strong>Salvedad importante:</strong> esto solo sirve para ejecución
+nativa. La versión del navegador seguiría igual.</p>
+<h3 id="generadores-de-topología-y-barrido-en-2d-funcionalidad-no-velocidad">7.4
+Generadores de topología y barrido en 2D — funcionalidad, no
+velocidad</h3>
+<p>Poder crear grafos estándar (ciclo, completa, …) dando solo
+<code>n</code>, y barrer <code>p</code> contra un segundo parámetro.
+Multiplica el costo de cómputo por el número de puntos del segundo eje:
+es la mejora que más presión pone sobre el hardware.</p>
+<h3 id="lo-que-no-vale-la-pena">7.5 Lo que <strong>no</strong> vale la
+pena</h3>
+<ul>
+<li><strong>Cambiar el generador aleatorio a PCG64:</strong>
+<em>medido</em>, resultó <strong>0.76×</strong>, o sea más lento que el
+generador actual. Descartado.</li>
+<li><strong>Optimizar las partes que no son aleatorios:</strong> entre
+comparación, máscara y <code>any</code> suman 8.8 % del tiempo. El techo
+de mejora es despreciable.</li>
+</ul>
+<hr />
+<h2 id="resumen-para-quien-cotiza">8. Resumen para quien cotiza</h2>
+<table>
+<colgroup>
+<col style="width: 33%" />
+<col style="width: 33%" />
+<col style="width: 33%" />
+</colgroup>
+<thead>
+<tr>
+<th>Pieza</th>
+<th>Criterio</th>
+<th>Justificación</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>CPU</strong></td>
+<td>Máximo rendimiento <strong>mononúcleo</strong>; luego, máximo número
+de núcleos <strong>de rendimiento</strong></td>
+<td>El código es monohilo hoy; con un cambio menor escala ×4 y más</td>
+</tr>
+<tr>
+<td><strong>RAM</strong></td>
+<td>64 GB, alta frecuencia, máximos canales</td>
+<td>El consumo crece con <code>n²</code>; el ancho de banda limita el
+paralelismo</td>
+</tr>
+<tr>
+<td><strong>GPU</strong></td>
+<td>Solo si se implementará el camino CuPy: NVIDIA con CUDA y VRAM
+amplia</td>
+<td>La carga encaja muy bien, pero hoy no se usa</td>
+</tr>
+<tr>
+<td><strong>Almacenamiento</strong></td>
+<td>SSD estándar</td>
+<td>No hay E/S durante el cálculo</td>
+</tr>
+<tr>
+<td><strong>Otros</strong></td>
+<td>Buena refrigeración</td>
+<td>Las corridas son de horas a carga sostenida en pocos núcleos</td>
+</tr>
+</tbody>
+</table>
+<p>Dos escenarios de compra:</p>
+<ul>
+<li><strong>Presupuesto contenido:</strong> priorizar CPU con alto
+rendimiento mononúcleo y 64 GB de RAM. Sin GPU dedicada. Con las mejoras
+7.1 y 7.2 se obtiene del orden de 6× sobre el equipo actual, sin tocar
+hardware exótico.</li>
+<li><strong>Presupuesto amplio:</strong> lo anterior con más núcleos de
+rendimiento, más GPU NVIDIA para habilitar el camino 7.3. Antes de
+comprometer el gasto en GPU, conviene hacer una prueba de concepto con
+CuPy y medirla.</li>
+</ul>
+<hr />
+<h2 id="lo-que-no-está-medido">9. Lo que NO está medido</h2>
+<p>Por honestidad, para que nadie tome decisiones sobre cifras que no
+existen:</p>
+<ul>
+<li><strong>La penalización de Pyodide (navegador) frente a Python
+nativo.</strong> No se pudo medir porque en este entorno el navegador
+tiene bloqueado el acceso al servidor local. Todas las cifras de este
+documento son de <strong>ejecución nativa</strong>. Se suele citar que
+Pyodide es varias veces más lento que CPython para código NumPy, pero
+<strong>eso no se verificó aquí</strong> y no debe usarse para
+justificar una compra. Es fácil de medir: ver sección 10.</li>
+<li><strong>La aceleración en GPU.</strong> No hay hardware NVIDIA
+disponible en este equipo.</li>
+<li><strong>El escalamiento más allá de 12 procesos.</strong> No hay
+máquina con más núcleos para probarlo; el ×4 medido está limitado por
+los 6 núcleos de rendimiento.</li>
+</ul>
+<hr />
+<h2 id="cómo-reproducir-las-mediciones">10. Cómo reproducir las
+mediciones</h2>
+<p>Desde la raíz del proyecto:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode bash"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">python3</span> <span class="at">-c</span> <span class="st">&quot;import sys; sys.path.insert(0,&#39;python&#39;); import numpy as np, time; from simulation.sweep import round_batch; from simulation.engine import get_adj, get_values; n=100; S=2000; g={&#39;directed&#39;:True,&#39;nodes&#39;:[{&#39;id&#39;:f&#39;n{i}&#39;,&#39;value&#39;:float(i%2),&#39;position&#39;:{&#39;x&#39;:0,&#39;y&#39;:0}} for i in range(n)],&#39;edges&#39;:[{&#39;id&#39;:f&#39;e{k}&#39;,&#39;source&#39;:f&#39;n{i}&#39;,&#39;target&#39;:f&#39;n{j}&#39;,&#39;weight&#39;:&#39;0.5&#39;} for k,(i,j) in enumerate([(i,j) for i in range(n) for j in range(n) if i!=j and (i+j)%3==0])]}; m=get_adj(g); v=get_values(g); round_batch(&#39;fv&#39;,m,v,True,100,times=1); t=time.perf_counter(); round_batch(&#39;fv&#39;,m,v,True,S,times=3); d=time.perf_counter()-t; print(f&#39;{S*3/d:,.0f} sim-rondas/s&#39;)&quot;</span></span></code></pre></div>
+<p>Para medir la penalización del navegador, que es el dato que falta:
+abrir la aplicación, ejecutar un sweep con parámetros conocidos,
+cronometrarlo, y comparar contra el mismo cálculo nativo.</p>
+<hr />
+<h2 id="nota-sobre-el-equipo-actual">11. Nota sobre el equipo
+actual</h2>
+<p>Conviene separar dos propósitos:</p>
+<ul>
+<li><strong>Desarrollar y usar la aplicación</strong> (editor, sweeps
+chicos, demostraciones): el equipo actual sobra. La aplicación está
+pensada para correr en cualquier navegador moderno, incluso
+modesto.</li>
+<li><strong>Correr estudios grandes</strong> (muchos valores de
+<code>n</code>, grafos de cientos de nodos, barridos en 2D): ahí es
+donde se justifica la máquina nueva, y donde aplican los criterios de la
+sección 6.</li>
+</ul>
+</body>
+</html>

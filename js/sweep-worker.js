@@ -1,0 +1,102 @@
+import { loadPyodide } from "https://cdn.jsdelivr.net/pyodide/v314.0.2/full/pyodide.mjs";
+
+const PYODIDE_INDEX_URL = "https://cdn.jsdelivr.net/pyodide/v314.0.2/full/";
+const SWEEP_FILES = [
+  "python/simulation/__init__.py",
+  "python/simulation/registry.py",
+  "python/simulation/rng.py",
+  "python/simulation/algorithms.py",
+  "python/simulation/engine.py",
+  "python/simulation/sweep.py",
+];
+
+async function fetchPythonFile(sourcePath) {
+  const sourceUrl = new URL(`../${sourcePath}`, import.meta.url);
+  const response = await fetch(sourceUrl, { cache: "no-store" });
+  if (!response.ok) {
+    throw new Error(`No se pudo descargar ${sourcePath} (${response.status}).`);
+  }
+
+  return {
+    destination: `/${sourcePath}`,
+    source: await response.text(),
+  };
+}
+
+function mountPythonFiles(pyodide, files) {
+  for (const { destination, source } of files) {
+    const parentDirectory = destination.slice(0, destination.lastIndexOf("/"));
+    pyodide.FS.mkdirTree(parentDirectory);
+    pyodide.FS.writeFile(destination, source, { encoding: "utf8" });
+  }
+}
+
+async function createRuntime() {
+  const pythonFilesPromise = Promise.all(SWEEP_FILES.map(fetchPythonFile));
+  const pyodide = await loadPyodide({ indexURL: PYODIDE_INDEX_URL });
+  const [, pythonFiles] = await Promise.all([
+    pyodide.loadPackage("numpy"),
+    pythonFilesPromise,
+  ]);
+
+  mountPythonFiles(pyodide, pythonFiles);
+  await pyodide.runPythonAsync(`
+import sys
+
+if "/python" not in sys.path:
+    sys.path.insert(0, "/python")
+`);
+
+  return pyodide;
+}
+
+const runtimePromise = createRuntime();
+
+function mensajeLegible(error) {
+  const texto = error instanceof Error ? error.message : String(error);
+  // Pyodide entrega el traceback completo de Python. La ultima linea con
+  // contenido es el mensaje real; el resto es ruido para quien usa la app.
+  const lineas = texto.trimEnd().split("\n").filter((linea) => linea.trim());
+  const ultima = lineas[lineas.length - 1];
+  if (!ultima) {
+    return texto;
+  }
+  // "ValueError: no hay version vectorizada" -> "no hay version vectorizada"
+  const conClase = ultima.match(/^\s*[A-Za-z_][\w.]*(?:Error|Exception):\s*(.+)$/);
+  return conClase ? conClase[1] : ultima.trim();
+}
+
+self.onmessage = async (event) => {
+  if (event.data?.type !== "run") {
+    return;
+  }
+
+  try {
+    const pyodide = await runtimePromise;
+    pyodide.globals.set("_sweep_params_json", JSON.stringify(event.data.params ?? {}));
+
+    await pyodide.runPythonAsync(`
+import json
+
+from js import Object, postMessage
+from pyodide.ffi import to_js
+from simulation.sweep import iter_sweep
+
+_params = json.loads(_sweep_params_json)
+for _message in iter_sweep(
+    _params["graph"],
+    algorithm=_params.get("algorithm", "fv"),
+    params=_params.get("algorithmParams") or {},
+    num_p_points=_params.get("numPPoints", 201),
+    total_simulations_per_p=_params.get("totalSimulationsPerP", 5000),
+    iterations=_params.get("iterations", 50),
+    rounds=_params.get("rounds", 1),
+):
+    postMessage(to_js(_message, dict_converter=Object.fromEntries))
+`);
+
+    self.postMessage({ type: "end" });
+  } catch (error) {
+    self.postMessage({ type: "error", message: mensajeLegible(error) });
+  }
+};

@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#151221" />
+    <title>Simulador de Consenso</title>
+    <link rel="stylesheet" href="./css/app.css" />
+  </head>
+  <body>
+    <div id="python-loader" class="python-loader" role="status" aria-live="polite">
+      <div class="loader-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+      <p>Cargando simulador…</p>
+      <small id="loader-detail">Iniciando Python en el navegador</small>
+    </div>
+
+    <main id="app" class="app-container" aria-label="Simulador de propagación en grafos">
+      <input id="file-input" type="file" accept=".json,application/json" hidden />
+
+      <nav class="view-tabs-bar" aria-label="Vistas de la aplicación" role="tablist">
+        <button id="view-editor" class="view-tab active" role="tab" aria-selected="true" data-view="editor">Editor</button>
+        <button id="view-analysis" class="view-tab" role="tab" aria-selected="false" data-view="analysis">Análisis de Convergencia</button>
+      </nav>
+
+      <section class="tabs-bar" aria-label="Pestañas de grafos">
+        <div id="graph-tabs" class="tabs-list" role="tablist">
+          <button class="tab active" id="tab_0" role="tab" aria-selected="true" data-tab-id="tab_0">
+            <span class="tab-name">Grafo 1</span>
+          </button>
+          <button id="new-tab-btn" class="tab-new" type="button">+ Nueva</button>
+        </div>
+      </section>
+
+      <div class="main-content">
+        <aside class="sidebar" aria-label="Herramientas del editor">
+          <h1>Nodos Disponibles</h1>
+
+          <div id="node-template" class="node-item" draggable="true" data-node-type="custom" title="Arrastra un nodo al canvas">
+            <div class="node-preview-circle"><span>Nodo</span></div>
+          </div>
+
+          <section class="graph-type-selector" aria-label="Tipo de grafo">
+            <label class="checkbox-label" for="directed-toggle">
+              <input id="directed-toggle" type="checkbox" checked />
+              <span>Grafo Dirigido</span>
+            </label>
+            <p id="directed-description" class="checkbox-info">→ Las aristas tienen dirección (con flechas)</p>
+          </section>
+
+          <div class="sidebar-actions" aria-label="Acciones de archivo">
+            <button id="show-json-btn" class="quiet-btn" type="button">Mostrar JSON</button>
+            <button id="import-btn" class="quiet-btn" type="button">Importar JSON</button>
+            <button id="export-btn" class="quiet-btn" type="button">Exportar JSON</button>
+            <button id="clear-btn" class="quiet-btn danger-quiet" type="button">Limpiar Grafo</button>
+          </div>
+
+          <section class="simulation-section" aria-labelledby="simulation-heading">
+            <h2 id="simulation-heading">Simulación</h2>
+            <div class="algorithm-selector">
+              <label class="field-label" for="algorithm-select">Algoritmo</label>
+              <!-- Opciones y campos de parámetros los genera app.py desde el
+                   registro de algoritmos. Agregar un algoritmo no toca este archivo. -->
+              <select id="algorithm-select" class="algorithm-select"></select>
+              <div id="algorithm-params" class="agreed-input-wrapper" hidden></div>
+            </div>
+            <button id="simulate-btn" class="simulate-btn" type="button" disabled>Simular</button>
+            <div id="simulation-results" class="simulation-results" hidden>
+              <button id="toggle-simulation-btn" class="secondary-btn" type="button">Ver Antes</button>
+              <button id="reset-simulation-btn" class="reset-simulation-btn" type="button">Resetear</button>
+              <div id="simulation-status" class="simulation-status"><p>Mostrando estado inicial</p></div>
+            </div>
+          </section>
+
+          <section class="info" aria-label="Instrucciones">
+            <p>Instrucciones:</p>
+            <ul>
+              <li>Arrastra nodos al canvas</li>
+              <li>Mueve nodos arrastrándolos</li>
+              <li>Doble clic en nodo para editar valor</li>
+              <li>Mantén Shift para conectar nodos</li>
+              <li>Shift mientras arrastras un nodo: snap a múltiplos de 10</li>
+              <li>Clic en arista para editar peso/probabilidad</li>
+              <li>Para desplazarte sobre el canvas, presiona espacio y arrastra</li>
+              <li>Exporta el grafo a JSON</li>
+            </ul>
+            <div id="shift-indicator" class="shift-indicator" hidden>⚡ Modo: Conectar nodos</div>
+          </section>
+        </aside>
+
+        <section id="canvas-container" class="canvas-container" aria-label="Canvas de grafo" tabindex="0">
+          <svg id="graph-canvas" class="graph-canvas" xmlns="http://www.w3.org/2000/svg" aria-label="Grafo editable">
+            <defs>
+              <pattern id="grid-dots" width="12" height="12" patternUnits="userSpaceOnUse">
+                <circle cx="1" cy="1" r="1" fill="#2A2440"></circle>
+              </pattern>
+              <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
+                <path d="M0,0 L10,5 L0,10 z" fill="#b1b1b7"></path>
+              </marker>
+            </defs>
+            <rect class="canvas-grid" x="0" y="0" width="100%" height="100%" fill="url(#grid-dots)"></rect>
+            <g id="edges-layer" class="edges-layer"></g>
+            <g id="edge-labels-layer" class="edge-labels-layer"></g>
+            <g id="nodes-layer" class="nodes-layer"></g>
+            <g id="connection-layer" class="connection-layer"></g>
+          </svg>
+
+          <div class="canvas-controls" aria-label="Controles del canvas">
+            <button id="zoom-in-btn" type="button" aria-label="Acercar">+</button>
+            <button id="zoom-out-btn" type="button" aria-label="Alejar">−</button>
+            <button id="fit-view-btn" type="button" aria-label="Ajustar vista">⌖</button>
+          </div>
+
+          <div id="minimap" class="minimap" aria-label="Minimapa">
+            <svg id="minimap-svg" viewBox="0 0 180 110" role="img" aria-label="Vista general del grafo">
+              <rect class="minimap-grid" width="180" height="110"></rect>
+              <g id="minimap-edges"></g>
+              <g id="minimap-nodes"></g>
+              <rect id="minimap-viewport" class="minimap-viewport" x="1" y="1" width="178" height="108"></rect>
+            </svg>
+          </div>
+        </section>
+
+        <aside id="sweep-panel" class="sweep-panel" aria-labelledby="sweep-heading" hidden>
+          <header class="sweep-panel-header"><h2 id="sweep-heading">Sweep de discrepancia vs p</h2></header>
+          <div class="sweep-controls">
+            <label class="sweep-field" for="p-points-input">Puntos de p
+              <input id="p-points-input" type="number" min="2" max="1001" value="201" />
+            </label>
+            <label class="sweep-field" for="simulations-input">Simulaciones totales por p
+              <input id="simulations-input" type="number" min="1" max="50000" value="5000" />
+            </label>
+            <label class="sweep-field" for="iterations-input">Iteraciones (refinamiento)
+              <input id="iterations-input" type="number" min="1" max="1000" value="50" />
+            </label>
+            <label class="sweep-field" for="rounds-input">Rondas por simulación
+              <input id="rounds-input" type="number" min="1" max="1000" value="1" />
+            </label>
+            <button id="sweep-run-btn" class="sweep-run-btn" type="button" disabled>Ejecutar sweep</button>
+            <button id="sweep-stop-btn" class="sweep-stop-btn" type="button" hidden>Detener</button>
+          </div>
+          <div id="sweep-status" class="sweep-status" aria-live="polite"><p>Ajusta los parámetros y ejecuta el sweep.</p></div>
+          <div class="sweep-chart" aria-label="Gráfica de discrepancia contra p">
+            <svg id="sweep-chart-svg" viewBox="0 0 400 320" role="img" aria-label="Sweep de discrepancia versus p">
+              <!-- Rejilla y etiquetas las regenera app.py: el número de
+                   divisiones depende de la escala de los datos. -->
+              <g id="chart-grid" class="chart-grid">
+                <line x1="44" y1="25" x2="382" y2="25"></line><line x1="44" y1="92" x2="382" y2="92"></line>
+                <line x1="44" y1="159" x2="382" y2="159"></line><line x1="44" y1="226" x2="382" y2="226"></line>
+                <line x1="44" y1="293" x2="382" y2="293"></line>
+              </g>
+              <path id="chart-confidence-band" class="chart-confidence-band" d=""></path>
+              <path id="chart-mean-line" class="chart-mean-line" d=""></path>
+              <g id="chart-axis-labels" class="chart-axis-labels">
+                <text x="38" y="297" text-anchor="end">0</text><text x="38" y="230" text-anchor="end">0.25</text>
+                <text x="38" y="163" text-anchor="end">0.5</text><text x="38" y="96" text-anchor="end">0.75</text>
+                <text x="38" y="29" text-anchor="end">1</text>
+                <text x="44" y="311" text-anchor="middle">0</text><text x="213" y="311" text-anchor="middle">0.5</text><text x="382" y="311" text-anchor="middle">1</text>
+              </g>
+              <line class="chart-axis" x1="44" y1="293" x2="382" y2="293"></line>
+              <line class="chart-axis" x1="44" y1="25" x2="44" y2="293"></line>
+            </svg>
+            <div id="chart-tooltip" class="chart-tooltip" hidden></div>
+          </div>
+        </aside>
+      </div>
+
+      <section id="json-panel" class="json-panel" aria-labelledby="json-heading" hidden>
+        <header class="json-panel-header">
+          <h2 id="json-heading">Datos del Grafo (JSON)</h2>
+          <button id="close-json-btn" class="close-btn" type="button" aria-label="Cerrar JSON">✕</button>
+        </header>
+        <pre id="json-content" class="json-content">{
+  "directed": true,
+  "nodes": [],
+  "edges": []
+}</pre>
+      </section>
+
+      <div id="app-dialog" class="app-dialog-backdrop" hidden>
+        <section class="app-dialog" role="dialog" aria-modal="true" aria-labelledby="app-dialog-title">
+          <h2 id="app-dialog-title">Editar</h2>
+          <p id="app-dialog-message"></p>
+          <input id="app-dialog-input" type="text" autocomplete="off" />
+          <div class="app-dialog-actions">
+            <button id="app-dialog-cancel" class="secondary-btn" type="button">Cancelar</button>
+            <button id="app-dialog-accept" class="simulate-btn" type="button">Aceptar</button>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <script type="module" src="./js/bootstrap.js"></script>
+  </body>
+</html>

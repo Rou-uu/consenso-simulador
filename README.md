@@ -6,7 +6,7 @@ algoritmos de propagación y el análisis de convergencia, pero ejecuta su lógi
 en Python dentro del navegador. No requiere FastAPI ni otro backend propio.
 
 El proyecto de referencia es de solo lectura. Todo el código de esta recreación
-vive en `PruebasLocura`.
+vive en `consenso-simulador`.
 
 ## Ejecución local
 
@@ -37,7 +37,7 @@ Python y los Web Workers necesitan un origen HTTP.
 ## Arquitectura
 
 ```text
-PruebasLocura/
+consenso-simulador/
 ├── index.html                 # Estructura de la interfaz y overlay de arranque
 ├── css/                       # Estilos y fidelidad visual
 ├── js/

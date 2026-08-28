@@ -33,7 +33,7 @@ class DevelopmentHandler(SimpleHTTPRequestHandler):
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Sirve PruebasLocura como un sitio estático local."
+        description="Sirve consenso-simulador como un sitio estático local."
     )
     parser.add_argument("--host", default="127.0.0.1", help="Dirección de escucha.")
     parser.add_argument("--port", type=int, default=8000, help="Puerto HTTP.")

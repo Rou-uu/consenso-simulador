@@ -56,7 +56,7 @@ que publica resultados parciales por `postMessage`.
 ## 3. Mapa de archivos
 
 ```
-PruebasLocura/
+consenso-simulador/
 ├── index.html              Esqueleto del DOM (contenedores vacíos, sin lógica)
 ├── css/app.css             Tema oscuro completo, por variables CSS
 ├── js/

@@ -1,0 +1,66 @@
+name: Publicar en GitHub Pages
+
+# El sitio es estático y no tiene paso de compilación: se publica el repositorio
+# tal cual. Los .py se sirven como archivos y Pyodide los descarga con fetch()
+# desde el navegador, así que no hace falta empaquetar nada.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Una publicación a la vez; no cancela la que ya esté corriendo.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  verificar:
+    name: Verificar el motor y la interfaz
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # NumPy va fijado: la línea base del arnés se grabó con esta versión y
+      # compara resultados numéricos exactos.
+      - name: Instalar dependencias
+        run: pip install numpy==2.4.5
+
+      - name: Arnés de equivalencia
+        run: python scripts/equivalencia.py
+
+      - name: Smoke de la interfaz
+        run: python scripts/smoke_ui.py
+
+  publicar:
+    name: Publicar
+    runs-on: ubuntu-latest
+    # No depende de `verificar` a propósito: el arnés compara flotantes exactos
+    # y todavía no se ha comprobado que dé idéntico en Linux x86-64 que en el
+    # macOS arm64 donde se grabó la línea base. En cuanto se confirme que pasa,
+    # agregar aquí `needs: verificar` lo convierte en un candado de publicación.
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/configure-pages@v5
+
+      - name: Empaquetar el sitio
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - name: Desplegar
+        id: deployment
+        uses: actions/deploy-pages@v4

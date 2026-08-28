@@ -14,7 +14,12 @@ Complementa a `README.md` (instalación y uso) y `AGENTS.md` (reglas de trabajo)
 | [04 · Barrido (sweep)](docs/04-barrido-sweep.md) | `python/simulation/sweep.py` — miles de réplicas vectorizadas. |
 | [05 · Controlador](docs/05-controlador-app.md) | `python/app.py` — estado, DOM, eventos, render SVG. |
 | [06 · Formatos, flujos y detalles](docs/06-formatos-flujos-y-detalles.md) | JSON, secuencias completas, cabos sueltos, glosario. |
-| [07 · Rendimiento y hardware](docs/07-rendimiento-y-hardware.md) | Perfil de cómputo, mediciones, mejoras futuras y criterios para cotizar equipo. |
+
+Aparte del recorrido anterior:
+
+| Documento | Cubre |
+|---|---|
+| [Rendimiento y hardware](docs/rendimiento-y-hardware.md) | Perfil de cómputo, mediciones en el equipo actual, mejoras futuras y criterios para cotizar equipo. |
 
 ---
 

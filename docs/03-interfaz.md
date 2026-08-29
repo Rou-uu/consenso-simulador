@@ -1,6 +1,6 @@
 # 03 — La capa de interfaz: `app.py`, el SVG y los eventos
 
-> **Archivos que cubre:** `python/app.py` (1241 líneas), `python/geometry.py` (110), `index.html`, `css/app.css`, y el punto de entrada `js/bootstrap.js:74`.
+> **Archivos que cubre:** `python/app.py` (1241 líneas), `python/geometry.py` (110), `index.html`, `css/app.css`, y el punto de entrada `js/bootstrap.js:75`.
 > **Qué puedes cambiar aquí:** cualquier cosa que decida *qué se dibuja* y *qué pasa al tocarlo*: colores, formas, gestos, diálogos, la gráfica del sweep, controles nuevos en la barra lateral.
 > **Qué es intocable y por qué:** `retain()` sobre todo callback que cruce a JavaScript, la delegación de eventos sobre contenedores estáticos, y la regla de no renderizar dentro de `pointerdown`/`pointerup` sobre un nodo. Los tres protegen la misma cosa: el DOM del canvas se destruye y se recrea entero en cada render, y lo que quedó apuntando al DOM viejo muere en silencio.
 > **Cómo verificas el cambio:** `python3 scripts/smoke_ui.py` (cubre el selector de algoritmos, los campos de parámetros y el eje Y de la gráfica) **y después** `python3 scripts/serve.py` → <http://localhost:8000>, porque el smoke test no ve estilos, ni eventos reales, ni Pyodide.
@@ -30,7 +30,7 @@ El precio: en cada `render_canvas()` se regenera el marcado de todos los nodos y
 
 ## 1. El ciclo de vida de una interacción
 
-> **Archivos que cubre:** `python/app.py:193` (`mark_graph_changed`), `:231` (`render_canvas`), `:486` (`render_json`), `:492` (`render_controls`), `:521` (`render_all`).
+> **Archivos que cubre:** `python/app.py:259` (`mark_graph_changed`), `:231` (`render_canvas`), `:486` (`render_json`), `:492` (`render_controls`), `:521` (`render_all`).
 > **Qué puedes cambiar aquí:** qué nivel de render dispara un handler nuevo.
 > **Qué es intocable y por qué:** `mark_graph_changed()` antes de renderizar en todo handler que edite nodos o aristas; sin eso el botón "Resetear" restaura un grafo que no corresponde.
 > **Cómo verificas el cambio:** `python3 scripts/serve.py`, crear dos nodos, Simular, mover un nodo, pulsar Resetear y comprobar que vuelve al estado que esperabas.
@@ -39,21 +39,21 @@ Todo evento del usuario recorre el mismo camino, pero **no todos pasan por `mark
 
 ```mermaid
 flowchart TD
-    A["Evento DOM<br/>sobre un elemento estatico de index.html"] --> B["PyProxy sostenido por retain<br/>app.py:40"]
+    A["Evento DOM<br/>sobre un elemento estatico de index.html"] --> B["PyProxy sostenido por retain<br/>app.py:70"]
     B --> C["Handler Python<br/>on_canvas_pointer_down, on_wheel, on_key_down..."]
     C --> D["Identificar el objeto tocado<br/>event.target.closest data-node-id / data-edge-id"]
     D --> E["Mutar STATE<br/>tab.nodes, tab.edges, zoom, pan_x, selected_node_id..."]
     E --> G{"Que cambio?"}
-    G -->|"topologia, valores, pestanas, JSON"| F["mark_graph_changed<br/>app.py:193"]
-    F --> H["render_all<br/>app.py:532"]
-    G -->|"solo camara: pan, zoom, arrastre en curso"| I["render_canvas<br/>app.py:233"]
-    G -->|"solo widgets: Shift, vista, algoritmo"| J["render_controls<br/>app.py:494"]
+    G -->|"topologia, valores, pestanas, JSON"| F["mark_graph_changed<br/>app.py:259"]
+    F --> H["render_all<br/>app.py:599"]
+    G -->|"solo camara: pan, zoom, arrastre en curso"| I["render_canvas<br/>app.py:299"]
+    G -->|"solo widgets: Shift, vista, algoritmo"| J["render_controls<br/>app.py:560"]
     H --> K["render_tabs + render_controls + render_canvas + render_json"]
     K --> I
-    I --> T["setAttribute transform en las 4 capas<br/>app.py:236-238"]
+    I --> T["setAttribute transform en las 4 capas<br/>app.py:302-304"]
     T --> L["Construir listas de cadenas<br/>edge_parts, label_parts, node_parts"]
-    L --> M["innerHTML de las 3 capas de contenido<br/>app.py:270, 269, 282"]
-    M --> N["render_minimap<br/>app.py:285"]
+    L --> M["innerHTML de las 3 capas de contenido<br/>app.py:336, 269, 282"]
+    M --> N["render_minimap<br/>app.py:351"]
     J --> O["Solo atributos: disabled, hidden, classList, textContent"]
     N --> P["El navegador reparsea el marcado y repinta"]
     O --> P
@@ -69,22 +69,22 @@ Elegir mal el nivel es la fuente más común de bugs "no se actualizó" o "se me
 
 | Función | Línea | Qué toca | Cuándo se llama |
 |---|---|---|---|
-| `render_all()` | `app.py:532` | pestañas + controles + canvas + JSON | Cambió el grafo: `add_node`, `add_edge`, borrar, importar, simular, cambiar de pestaña |
-| `render_canvas()` | `app.py:233` | `transform` de las 4 capas, contenido de 3 de ellas, minimapa | Cambió solo la cámara o una posición: arrastre, pan, zoom, `resize` |
-| `render_controls()` | `app.py:494` | barra lateral, vistas, indicador de Shift | Cambió un estado que no se dibuja: `Shift`, cambio de vista, cambio de algoritmo |
-| `render_json()` | `app.py:488` | panel de JSON | Abrir/cerrar el panel |
+| `render_all()` | `app.py:599` | pestañas + controles + canvas + JSON | Cambió el grafo: `add_node`, `add_edge`, borrar, importar, simular, cambiar de pestaña |
+| `render_canvas()` | `app.py:299` | `transform` de las 4 capas, contenido de 3 de ellas, minimapa | Cambió solo la cámara o una posición: arrastre, pan, zoom, `resize` |
+| `render_controls()` | `app.py:560` | barra lateral, vistas, indicador de Shift | Cambió un estado que no se dibuja: `Shift`, cambio de vista, cambio de algoritmo |
+| `render_json()` | `app.py:554` | panel de JSON | Abrir/cerrar el panel |
 
 `render_all()` llama a `render_canvas()` (`:524`), así que **nunca hace falta llamar a los dos**. En cambio `render_canvas()` no llama a `render_controls()`: por eso arrastrar un nodo no actualiza el botón "Simular". No importa, porque arrastrar no cambia si hay nodos o no.
 
 ### `mark_graph_changed()`: el guardián del "antes"
 
 ```python
-def mark_graph_changed() -> None:          # app.py:193
+def mark_graph_changed() -> None:          # app.py:259
     if STATE.simulation is None and STATE.tab.nodes:
         STATE.initial_graph = graph_snapshot()
 ```
 
-Son tres líneas y es fácil pasarlas por alto, pero definen el contrato de toda la simulación: **mientras no haya una simulación en curso, cada edición del grafo re-fija el punto de partida**. Ese `STATE.initial_graph` es lo que restaura el botón "Resetear" (`reset_simulation`, `app.py:1197`–`1092`) y lo que `simulate()` usa como "antes" (`app.py:1071`).
+Son tres líneas y es fácil pasarlas por alto, pero definen el contrato de toda la simulación: **mientras no haya una simulación en curso, cada edición del grafo re-fija el punto de partida**. Ese `STATE.initial_graph` es lo que restaura el botón "Resetear" (`reset_simulation`, `app.py:1374`–`1092`) y lo que `simulate()` usa como "antes" (`app.py:1138`).
 
 **DECISION DELIBERADA** — La condición `STATE.simulation is None` significa que **cuando ya hay un resultado en pantalla, editar el grafo NO actualiza el snapshot**. El motivo: si no fuera así, mover un nodo después de simular destruiría el "antes" al que quieres volver. La consecuencia no obvia, que hay que aceptar: si simulas, arrastras nodos y luego pulsas "Resetear", **las posiciones vuelven a las del snapshot** y tu reacomodo se pierde.
 
@@ -102,12 +102,12 @@ Son tres líneas y es fácil pasarlas por alto, pero definen el contrato de toda
 ```python
 PROXIES: list[Any] = []                    # app.py:22
 
-def retain(callback: Callable):            # app.py:40
+def retain(callback: Callable):            # app.py:70
     proxy = create_proxy(callback)
     PROXIES.append(proxy)
     return proxy
 
-def listen(target, event_name: str, callback: Callable) -> None:   # app.py:46
+def listen(target, event_name: str, callback: Callable) -> None:   # app.py:76
     target.addEventListener(event_name, retain(callback))
 ```
 
@@ -119,37 +119,37 @@ def listen(target, event_name: str, callback: Callable) -> None:   # app.py:46
 
 | Cruce a JS | Línea | Qué se retiene |
 |---|---|---|
-| `addEventListener` (40 llamadas) | `app.py:1303`–`1230` vía `listen()` | los handlers |
-| `window.setTimeout(retain(cleanup), 750)` | `app.py:966` | la limpieza del `Blob` de exportación (`cleanup`, `:951`) |
-| `file.text().then(callback)` | `app.py:1012`–`1002` | el resolutor de la promesa de lectura de archivo (`loaded`, `:998`) |
-| `WORKER.addEventListener("message"/"error", ...)` | `app.py:1286`–`1175` | los handlers del Web Worker del sweep |
+| `addEventListener` (40 llamadas) | `app.py:1485`–`1230` vía `listen()` | los handlers |
+| `window.setTimeout(retain(cleanup), 750)` | `app.py:1033` | la limpieza del `Blob` de exportación (`cleanup`, `:951`) |
+| `file.text().then(callback)` | `app.py:1079`–`1002` | el resolutor de la promesa de lectura de archivo (`loaded`, `:998`) |
+| `WORKER.addEventListener("message"/"error", ...)` | `app.py:1468`–`1175` | los handlers del Web Worker del sweep |
 
 Los cuatro casos son distintos (listener, temporizador, promesa, worker) y los cuatro necesitan lo mismo. La prueba de que esto se aprendió por las malas: `listen()` existe precisamente para que sea **imposible** registrar un listener sin retenerlo.
 
 **DEUDA CONOCIDA** — `PROXIES` (`app.py:22`) es una lista que solo crece; nunca se llama a `proxy.destroy()`. Para los ~40 listeners iniciales da igual: viven lo que vive la página. Pero los tres casos de la tabla que están *dentro* de handlers añaden un proxy **por cada uso**: exportar JSON cien veces deja cien proxies de `cleanup`, y cada sweep deja dos. Es una fuga real, acotada por la paciencia del usuario, y hoy no molesta. Si algún día hay que arreglarla, el sitio es `retain()`: devolver también un "handle" para poder destruir el proxy en el `cleanup`. **No la "arregles" quitando `retain()`.**
 
-**Al depurar:** `scripts/smoke_ui.py:171` sustituye `create_proxy` por la identidad (`ffi.create_proxy = lambda fn: fn`). Fuera del navegador el problema no existe, así que el smoke test **no puede detectar un `retain()` olvidado**. Eso solo se ve abriendo la página.
+**Al depurar:** `scripts/smoke_ui.py:172` sustituye `create_proxy` por la identidad (`ffi.create_proxy = lambda fn: fn`). Fuera del navegador el problema no existe, así que el smoke test **no puede detectar un `retain()` olvidado**. Eso solo se ve abriendo la página.
 
 ---
 
 ## 3. Las cuatro capas SVG
 
-> **Archivos que cubre:** `index.html:90`–`105`, y las reglas `.graph-canvas`, `.canvas-grid`, `.edge-path`, `.edge-label`, `.graph-node` de `css/app.css`.
+> **Archivos que cubre:** `index.html:124`–`105`, y las reglas `.graph-canvas`, `.canvas-grid`, `.edge-path`, `.edge-label`, `.graph-node` de `css/app.css`.
 > **Qué puedes cambiar aquí:** el contenido de cada capa, el orden de pintado, los estilos de nodo y arista.
 > **Qué es intocable y por qué:** los `id` de los cuatro `<g>` y del `<svg>`. `app.py` los busca por `getElementById` y los usa como ancla de listeners; renombrar uno rompe el arranque sin mensaje útil.
 > **Cómo verificas el cambio:** `python3 scripts/serve.py`, crear dos nodos y una arista, y comprobar el orden de tapado (nodos encima de etiquetas, etiquetas encima de aristas).
 
-El `<svg id="graph-canvas">` de `index.html:91`–`105` tiene una estructura fija que Python nunca crea ni destruye: solo **rellena**.
+El `<svg id="graph-canvas">` de `index.html:125`–`105` tiene una estructura fija que Python nunca crea ni destruye: solo **rellena**.
 
 ```mermaid
 flowchart TD
     SVG["svg id=graph-canvas — estatico, aqui viven TODOS los listeners del canvas"]
-    SVG --> DEFS["defs — index.html:92-99<br/>pattern id=grid-dots 12x12<br/>marker id=arrowhead relleno hex b1b1b7"]
-    SVG --> GRID["rect.canvas-grid — index.html:100<br/>fondo de puntos, 100% x 100%<br/>NO recibe el transform: no se mueve ni escala<br/>pointer-events none"]
-    SVG --> L1["g id=edges-layer — index.html:101"]
-    SVG --> L2["g id=edge-labels-layer — index.html:102"]
-    SVG --> L3["g id=nodes-layer — index.html:103"]
-    SVG --> L4["g id=connection-layer — index.html:104"]
+    SVG --> DEFS["defs — index.html:126-133<br/>pattern id=grid-dots 12x12<br/>marker id=arrowhead relleno hex b1b1b7"]
+    SVG --> GRID["rect.canvas-grid — index.html:134<br/>fondo de puntos, 100% x 100%<br/>NO recibe el transform: no se mueve ni escala<br/>pointer-events none"]
+    SVG --> L1["g id=edges-layer — index.html:135"]
+    SVG --> L2["g id=edge-labels-layer — index.html:136"]
+    SVG --> L3["g id=nodes-layer — index.html:137"]
+    SVG --> L4["g id=connection-layer — index.html:138"]
 
     L1 --> L1C["Por arista, un g.graph-edge con data-edge-id:<br/>path.edge-hit — stroke transparent, ancho 16, zona de clic<br/>path.edge-path — el trazo visible mas marker-end si es dirigido<br/>circle r=4 origen hex ff6b6b y circle r=4 destino hex 4ecdc4"]
     L2 --> L2C["Por arista, un g.edge-label con data-edge-id:<br/>rect ancho = max de 40 y len·peso·*7.4+14, alto 26<br/>text centrado con el peso<br/>trasladado a label_x, label_y de edge_geometry"]
@@ -160,21 +160,21 @@ flowchart TD
 Puntos que hay que tener claros:
 
 - **El orden es el orden de pintado.** Aristas abajo, luego etiquetas, luego nodos (los nodos tapan las etiquetas), y la línea de conexión siempre encima.
-- **Las cuatro capas comparten un mismo `transform`.** `render_canvas()` (`app.py:236`–`236`) construye una sola cadena `translate(pan_x pan_y) scale(zoom)` y se la aplica a las cuatro. Ese es *todo* el mecanismo de pan y zoom: las coordenadas dentro del marcado son siempre coordenadas de mundo, jamás de pantalla.
+- **Las cuatro capas comparten un mismo `transform`.** `render_canvas()` (`app.py:302`–`236`) construye una sola cadena `translate(pan_x pan_y) scale(zoom)` y se la aplica a las cuatro. Ese es *todo* el mecanismo de pan y zoom: las coordenadas dentro del marcado son siempre coordenadas de mundo, jamás de pantalla.
 - **DECISION DELIBERADA** — La rejilla (`rect.canvas-grid`) queda fuera del `transform`. Es un fondo fijo, no un papel milimetrado que se mueva con el grafo. Si quisieras que se moviera, tendrías que animar el `patternTransform`, no meter el `<rect>` en una capa.
 - **INVARIANTE** — Los contenedores son el ancla estable. Los `id` y las `class` de los `<g>` sobreviven a `innerHTML` porque solo se reemplazan sus *hijos*. Por eso los listeners y las reglas CSS se cuelgan siempre del contenedor, nunca del contenido.
-- **DECISION DELIBERADA** — `edge-hit` usa `stroke="transparent"`, no `stroke="none"` (`app.py:252`). La diferencia es funcional, no estética: `none` significa "sin pintar" y no recibe clics; `transparent` es un color con alfa 0, sí se pinta y sí es clicable. Ese trazo invisible de 16 px de ancho es lo que hace que se pueda clicar una arista de 3 px.
+- **DECISION DELIBERADA** — `edge-hit` usa `stroke="transparent"`, no `stroke="none"` (`app.py:318`). La diferencia es funcional, no estética: `none` significa "sin pintar" y no recibe clics; `transparent` es un color con alfa 0, sí se pinta y sí es clicable. Ese trazo invisible de 16 px de ancho es lo que hace que se pueda clicar una arista de 3 px.
 
 ---
 
 ## 4. `render_canvas()`: reconstruir el `innerHTML` desde cero
 
-> **Archivos que cubre:** `python/app.py:233`–`283`.
+> **Archivos que cubre:** `python/app.py:299`–`283`.
 > **Qué puedes cambiar aquí:** el marcado que se genera por nodo y por arista.
 > **Qué es intocable y por qué:** el `html.escape()` de todo lo que venga del usuario o de un JSON importado, y la escritura en **tres** asignaciones a `innerHTML` en vez de N inserciones.
 > **Cómo verificas el cambio:** `python3 scripts/serve.py`, importar un JSON con un id que contenga `"` o `<`, y comprobar que el canvas sigue dibujándose.
 
-`app.py:233`–`283`. El cuerpo completo, en orden:
+`app.py:299`–`283`. El cuerpo completo, en orden:
 
 1. **Transform** (`:234`–`236`) — la misma cadena a las **cuatro** capas, vía `setAttribute`.
 2. **Índice de nodos** (`:233`) — `graph_nodes_by_id()` devuelve `{node.id: Node}`; sirve para resolver `edge.source` / `edge.target` en O(1).
@@ -189,7 +189,7 @@ Puntos que hay que tener claros:
 
 ### Coste
 
-**DEUDA CONOCIDA** — Por render: O(N) para nodos y O(E²) para aristas, porque `has_reverse()` (`geometry.py:88`) recorre todas las aristas por cada arista (`app.py:247`). Durante un arrastre esto ocurre **en cada `pointermove`** (`:691`), más un `getBoundingClientRect()` en `render_minimap` (`:324`) que fuerza un cálculo de layout síncrono. Con decenas de aristas es imperceptible; con varios cientos el arrastre empieza a saltar. Si algún día hay que optimizar, el orden es: (1) precalcular el conjunto de pares invertidos una vez por render en lugar de `has_reverse` por arista, (2) durante el arrastre mover solo el `transform` del `<g>` del nodo arrastrado y sus aristas — con el cuidado de §6, porque tocar el DOM del nodo entre dos clics es exactamente lo que rompe el `dblclick`.
+**DEUDA CONOCIDA** — Por render: O(N) para nodos y O(E²) para aristas, porque `has_reverse()` (`geometry.py:88`) recorre todas las aristas por cada arista (`app.py:313`). Durante un arrastre esto ocurre **en cada `pointermove`** (`:691`), más un `getBoundingClientRect()` en `render_minimap` (`:324`) que fuerza un cálculo de layout síncrono. Con decenas de aristas es imperceptible; con varios cientos el arrastre empieza a saltar. Si algún día hay que optimizar, el orden es: (1) precalcular el conjunto de pares invertidos una vez por render en lugar de `has_reverse` por arista, (2) durante el arrastre mover solo el `transform` del `<g>` del nodo arrastrado y sus aristas — con el cuidado de §6, porque tocar el DOM del nodo entre dos clics es exactamente lo que rompe el `dblclick`.
 
 ---
 
@@ -213,16 +213,16 @@ Interpola linealmente componente a componente (`:28`), decide el color del texto
 
 Dos comportamientos que hay que conocer:
 
-- **DEUDA CONOCIDA** — Todo se recorta a [0, 1] (`:27`). Un nodo con valor 5 y otro con valor 1 se dibujan **exactamente igual**. El editor acepta cualquier flotante (`app.py:777`), así que un grafo con valores fuera de [0,1] se ve monocromo aunque los números en los círculos sean distintos.
+- **DEUDA CONOCIDA** — Todo se recorta a [0, 1] (`:27`). Un nodo con valor 5 y otro con valor 1 se dibujan **exactamente igual**. El editor acepta cualquier flotante (`app.py:844`), así que un grafo con valores fuera de [0,1] se ve monocromo aunque los números en los círculos sean distintos.
 - **DEUDA CONOCIDA** — `NaN` y lo no numérico caen a 0.0 (`:21`–`:26`), es decir, azul. No hay color de error, así que un valor corrupto es indistinguible de un cero legítimo.
 
 ### `node_center(node)` — `geometry.py:34`
 
-Una línea, y conviene entender por qué existe: **`node.x` y `node.y` son la esquina superior izquierda de la caja de 60×60, no el centro.** El centro es `(x + NODE_RADIUS, y + NODE_RADIUS)` = `(x + 30, y + 30)`. Esto viene de que el `<g>` se traslada a `(x, y)` (`app.py:279`) y el círculo dentro está en `cx=30, cy=30` (`app.py:280`). Por eso:
+Una línea, y conviene entender por qué existe: **`node.x` y `node.y` son la esquina superior izquierda de la caja de 60×60, no el centro.** El centro es `(x + NODE_RADIUS, y + NODE_RADIUS)` = `(x + 30, y + 30)`. Esto viene de que el `<g>` se traslada a `(x, y)` (`app.py:345`) y el círculo dentro está en `cx=30, cy=30` (`app.py:346`). Por eso:
 
-- `add_node()` resta 30 a la posición del cursor (`app.py:547`),
+- `add_node()` resta 30 a la posición del cursor (`app.py:614`),
 - `fit_transform()` suma `NODE_RADIUS * 2` para el borde derecho/inferior (`geometry.py:102`–`103`),
-- el minimapa suma 30 antes de escalar (`app.py:307`–`306`).
+- el minimapa suma 30 antes de escalar (`app.py:373`–`306`).
 
 Confundir esquina con centro desplaza todo 30 px. Es el error más fácil de cometer al tocar este archivo.
 
@@ -257,56 +257,56 @@ flowchart TD
 
 ### `has_reverse(edge, edges)` — `geometry.py:88`
 
-Decide si hay que curvar. `render_canvas` la usa como `tab.directed and has_reverse(edge, tab.edges)` (`app.py:247`): en un grafo **no dirigido** nunca se curva, porque ahí `add_edge` ya impide el par recíproco (`app.py:557`–`553`).
+Decide si hay que curvar. `render_canvas` la usa como `tab.directed and has_reverse(edge, tab.edges)` (`app.py:313`): en un grafo **no dirigido** nunca se curva, porque ahí `add_edge` ya impide el par recíproco (`app.py:624`–`553`).
 
-**DEUDA CONOCIDA** — Compara por `other.id != edge.id` (`:90`), así que dos aristas paralelas en el **mismo** sentido no se curvan y quedan **superpuestas e indistinguibles**. Y `apply_propagation` (`app.py:1039`–`1041`) las empareja por `(source, target)`, de modo que además reciben el mismo resaltado.
+**DEUDA CONOCIDA** — Compara por `other.id != edge.id` (`:90`), así que dos aristas paralelas en el **mismo** sentido no se curvan y quedan **superpuestas e indistinguibles**. Y `apply_propagation` (`app.py:1106`–`1041`) las empareja por `(source, target)`, de modo que además reciben el mismo resaltado.
 
 ### `fit_transform(nodes, width, height)` — `geometry.py:97`
 
-Calcula la caja envolvente (`:100`–`105`), reserva 80 px de margen (`:106`), escoge la escala menor de las dos dimensiones y centra. Devuelve `(zoom, pan_x, pan_y)`, que `fit_view()` (`app.py:859`–`851`) vuelca directo en `STATE`.
+Calcula la caja envolvente (`:100`–`105`), reserva 80 px de margen (`:106`), escoge la escala menor de las dos dimensiones y centra. Devuelve `(zoom, pan_x, pan_y)`, que `fit_view()` (`app.py:926`–`851`) vuelca directo en `STATE`.
 
-**DEUDA CONOCIDA** — `fit_transform` recorta el zoom a `[0.2, 2.0]` (`:107`), mientras `on_wheel` (`app.py:833`) y `zoom_by` (`app.py:850`) lo recortan a `[0.2, 3.0]`. Si estás a zoom 2.6 y pulsas "ajustar vista", puedes acabar más lejos de lo que esperabas. Sin nodos devuelve `(1.0, 0.0, 0.0)` (`:98`–`:99`), que es justo lo que necesita `main()` al arrancar con el grafo vacío.
+**DEUDA CONOCIDA** — `fit_transform` recorta el zoom a `[0.2, 2.0]` (`:107`), mientras `on_wheel` (`app.py:900`) y `zoom_by` (`app.py:917`) lo recortan a `[0.2, 3.0]`. Si estás a zoom 2.6 y pulsas "ajustar vista", puedes acabar más lejos de lo que esperabas. Sin nodos devuelve `(1.0, 0.0, 0.0)` (`:98`–`:99`), que es justo lo que necesita `main()` al arrancar con el grafo vacío.
 
 ---
 
 ## 6. Las interacciones
 
-> **Archivos que cubre:** `python/app.py:643`–`903` (punteros, rueda, teclado) y las reglas `.canvas-container.shift-mode` y `.graph-canvas` de `css/app.css`.
+> **Archivos que cubre:** `python/app.py:710`–`903` (punteros, rueda, teclado) y las reglas `.canvas-container.shift-mode` y `.graph-canvas` de `css/app.css`.
 > **Qué puedes cambiar aquí:** gestos nuevos, atajos de teclado, el comportamiento del zoom.
 > **Qué es intocable y por qué:** el umbral de 6 px, los `return` sin render de `:659` y `:663`, y `setPointerCapture` sobre el `<svg>`. Los tres existen para que el doble clic siga llegando y para que el arrastre no se corte al primer píxel.
 > **Cómo verificas el cambio:** `python3 scripts/serve.py`, y con **ratón físico** (no trackpad): doble clic en un nodo debe abrir el editor de valor, y arrastrar un nodo hasta fuera de la ventana debe seguir moviéndolo.
 
 ### La máquina de estados del puntero
 
-Tres diccionarios globales, mutuamente excluyentes, que representan "qué gesto está en curso": `DRAG` (`app.py:27`), `CONNECTION` (`:26`), `PAN` (`:27`). Un dict vacío significa "ningún gesto". Se comprueban con verdad booleana (`if DRAG:`), no con `is None`.
+Tres diccionarios globales, mutuamente excluyentes, que representan "qué gesto está en curso": `DRAG` (`app.py:34`), `CONNECTION` (`:26`), `PAN` (`:27`). Un dict vacío significa "ningún gesto". Se comprueban con verdad booleana (`if DRAG:`), no con `is None`.
 
 ```mermaid
 stateDiagram-v2
     [*] --> Reposo
-    Reposo --> Arrastrando : pointerdown sobre nodo sin Shift, app.py:655-669
-    Reposo --> Conectando : pointerdown sobre nodo con Shift, app.py:650-654
-    Reposo --> Desplazando : pointerdown en vacio con Espacio pulsado, app.py:677-680
-    Reposo --> Reposo : pointerdown sobre arista, selected_edge_id sin render, app.py:671-674
+    Reposo --> Arrastrando : pointerdown sobre nodo sin Shift, app.py:722-736
+    Reposo --> Conectando : pointerdown sobre nodo con Shift, app.py:717-721
+    Reposo --> Desplazando : pointerdown en vacio con Espacio pulsado, app.py:744-747
+    Reposo --> Reposo : pointerdown sobre arista, selected_edge_id sin render, app.py:738-741
 
-    Arrastrando --> Arrastrando : pointermove con distancia menor que 6px, NO hace nada, app.py:694
+    Arrastrando --> Arrastrando : pointermove con distancia menor que 6px, NO hace nada, app.py:761
     Arrastrando --> Arrastrando : pointermove pasado el umbral, moved=True, mueve nodo, render_canvas
-    Arrastrando --> Reposo : pointerup con moved=True, mark_graph_changed y render_all, app.py:728-731
-    Arrastrando --> Editor : pointerup con moved=False y segundo clic en 750ms y 14px, app.py:740
-    Arrastrando --> Reposo : pointerup con moved=False, guarda LAST_NODE_CLICK, app.py:744-750
+    Arrastrando --> Reposo : pointerup con moved=True, mark_graph_changed y render_all, app.py:795-798
+    Arrastrando --> Editor : pointerup con moved=False y segundo clic en 750ms y 14px, app.py:807
+    Arrastrando --> Reposo : pointerup con moved=False, guarda LAST_NODE_CLICK, app.py:811-817
 
-    Conectando --> Conectando : pointermove reescribe connection-layer, app.py:709
-    Conectando --> Reposo : pointerup, elementFromPoint decide el destino y add_edge, app.py:753-762
-    Conectando --> Reposo : keyup Shift, CONNECTION.clear y vacia connection-layer, app.py:890-894
+    Conectando --> Conectando : pointermove reescribe connection-layer, app.py:776
+    Conectando --> Reposo : pointerup, elementFromPoint decide el destino y add_edge, app.py:820-829
+    Conectando --> Reposo : keyup Shift, CONNECTION.clear y vacia connection-layer, app.py:957-961
 
-    Desplazando --> Desplazando : pointermove, pan = pan_inicial + delta de cliente, app.py:713-716
-    Desplazando --> Reposo : pointerup o keyup Espacio, PAN.clear, app.py:765 y 886
+    Desplazando --> Desplazando : pointermove, pan = pan_inicial + delta de cliente, app.py:780-783
+    Desplazando --> Reposo : pointerup o keyup Espacio, PAN.clear, app.py:832 y 886
 
-    Editor --> Reposo : open_node_editor abre el dialogo propio, app.py:768
+    Editor --> Reposo : open_node_editor abre el dialogo propio, app.py:835
 ```
 
 ### El umbral de 6 píxeles, y por qué existe
 
-`app.py:686`–`685`, con el comentario original en el código:
+`app.py:753`–`685`, con el comentario original en el código:
 
 ```python
 if not bool(DRAG["moved"]):
@@ -330,25 +330,25 @@ if not bool(DRAG["moved"]):
 4. El navegador solo emite `dblclick` si los dos `click` ocurrieron sobre **el mismo elemento**. El elemento del segundo clic es un `<g>` nuevo.
 5. **El `dblclick` nunca se emite y el editor de valor no se abre.** Sin error, sin pista.
 
-El umbral es la mitad barata de la solución. La otra mitad es que **`on_canvas_pointer_down` no renderiza nunca al tocar un nodo o una arista** (`app.py:670`, `:663`): la rama de nodo y la de arista hacen `return` antes del `render_canvas()` de la línea `:670`, que solo se ejecuta al pulsar en vacío.
+El umbral es la mitad barata de la solución. La otra mitad es que **`on_canvas_pointer_down` no renderiza nunca al tocar un nodo o una arista** (`app.py:737`, `:663`): la rama de nodo y la de arista hacen `return` antes del `render_canvas()` de la línea `:670`, que solo se ejecuta al pulsar en vacío.
 
-Y la tercera mitad (sí, son tres) es un **detector de doble clic escrito a mano**, `app.py:733`–`739`, que no depende del navegador:
+Y la tercera mitad (sí, son tres) es un **detector de doble clic escrito a mano**, `app.py:800`–`739`, que no depende del navegador:
 
 ```python
-if previous_id == node_id and elapsed <= 750.0 and distance <= 14.0:   # app.py:740
+if previous_id == node_id and elapsed <= 750.0 and distance <= 14.0:   # app.py:807
     LAST_NODE_CLICK.clear()
     open_node_editor(node_id)
 ```
 
-**DECISION DELIBERADA** — Guarda en `LAST_NODE_CLICK` (`app.py:30`) el id, el instante (`window.performance.now()`) y las coordenadas del último clic sin arrastre. La ventana es de **750 ms y 14 px**, deliberadamente más generosa que la del sistema, porque este detector tiene que funcionar aunque el nativo se pierda.
+**DECISION DELIBERADA** — Guarda en `LAST_NODE_CLICK` (`app.py:37`) el id, el instante (`window.performance.now()`) y las coordenadas del último clic sin arrastre. La ventana es de **750 ms y 14 px**, deliberadamente más generosa que la del sistema, porque este detector tiene que funcionar aunque el nativo se pierda.
 
 ```mermaid
 sequenceDiagram
     participant U as Usuario
     participant SVG as svg id=graph-canvas
-    participant PU as on_canvas_pointer_up app.py:719
-    participant DC as on_canvas_double_click app.py:793
-    participant ED as open_node_editor app.py:768
+    participant PU as on_canvas_pointer_up app.py:786
+    participant DC as on_canvas_double_click app.py:860
+    participant ED as open_node_editor app.py:835
 
     U->>SVG: pointerdown y pointerup sobre node_3
     SVG->>PU: moved = False
@@ -364,7 +364,7 @@ sequenceDiagram
     ED-->>DC: return inmediato, app-dialog ya NO esta hidden
 ```
 
-**INVARIANTE** — Los dos caminos coexisten y **se pisarían** si no fuera por la guarda de reentrada de `open_node_editor` (`app.py:769`–`759`):
+**INVARIANTE** — Los dos caminos coexisten y **se pisarían** si no fuera por la guarda de reentrada de `open_node_editor` (`app.py:836`–`759`):
 
 ```python
 if not bool(by_id("app-dialog").hidden):
@@ -375,12 +375,12 @@ Sin ella, el `dblclick` nativo reabriría el diálogo y **repondría el valor or
 
 ### Captura de puntero: `setPointerCapture` sobre el `<svg>`, no sobre el nodo
 
-**INVARIANTE** — `app.py:653` y `:658` capturan el puntero en **`graph-canvas`**, el elemento estático. Es obligatorio, por dos razones distintas:
+**INVARIANTE** — `app.py:720` y `:658` capturan el puntero en **`graph-canvas`**, el elemento estático. Es obligatorio, por dos razones distintas:
 
 1. Durante un arrastre, el `<g>` del nodo se destruye y se recrea en cada `pointermove`. Si la captura estuviera sobre el nodo, moriría con él y el arrastre se cortaría al primer píxel.
 2. La captura garantiza que `pointermove` y `pointerup` siguen llegando aunque el cursor salga del SVG (a la barra lateral, o fuera de la ventana).
 
-El efecto colateral que hay que conocer: **con la captura activa, `event.target` es siempre el `<svg>`**, nunca el elemento bajo el cursor. Por eso, para saber sobre qué nodo se soltó una conexión, `on_canvas_pointer_up` no puede mirar `event.target` y usa (`app.py:753`–`743`):
+El efecto colateral que hay que conocer: **con la captura activa, `event.target` es siempre el `<svg>`**, nunca el elemento bajo el cursor. Por eso, para saber sobre qué nodo se soltó una conexión, `on_canvas_pointer_up` no puede mirar `event.target` y usa (`app.py:820`–`743`):
 
 ```python
 target_element = document.elementFromPoint(event.clientX, event.clientY)
@@ -391,20 +391,20 @@ target_node = target_element.closest("[data-node-id]") if target_element else No
 
 ### Shift: conectar
 
-- `on_key_down` (`app.py:868`–`859`) pone `STATE.shift_pressed = True` y llama a `render_controls()`, que muestra `#shift-indicator` (`:512`) y añade la clase `shift-mode` al contenedor (`:513`), lo que activa el cursor de cruz de la regla `.canvas-container.shift-mode` en `css/app.css`.
-- **DECISION DELIBERADA** — `on_canvas_pointer_down` acepta **tanto `STATE.shift_pressed` como `event.shiftKey`** (`app.py:650`). El segundo es la red de seguridad: si la ventana perdió el foco mientras Shift estaba pulsado, el `keyup` nunca llegó y el estado quedó desfasado; `event.shiftKey` siempre dice la verdad.
+- `on_key_down` (`app.py:935`–`859`) pone `STATE.shift_pressed = True` y llama a `render_controls()`, que muestra `#shift-indicator` (`:512`) y añade la clase `shift-mode` al contenedor (`:513`), lo que activa el cursor de cruz de la regla `.canvas-container.shift-mode` en `css/app.css`.
+- **DECISION DELIBERADA** — `on_canvas_pointer_down` acepta **tanto `STATE.shift_pressed` como `event.shiftKey`** (`app.py:717`). El segundo es la red de seguridad: si la ventana perdió el foco mientras Shift estaba pulsado, el `keyup` nunca llegó y el estado quedó desfasado; `event.shiftKey` siempre dice la verdad.
 - `on_key_up` (`:879`–`883`) cancela una conexión en curso al soltar Shift y vacía `connection-layer`.
 - **DEUDA CONOCIDA** — `keydown`/`keyup` están sobre `window` (`:1203`–`1204`), así que escribir una mayúscula dentro del diálogo también enciende el indicador de "Modo: Conectar nodos".
 
 ### Espacio: desplazar
 
-**DECISION DELIBERADA** — `on_key_down` (`app.py:871`–`862`) marca `space_pressed` y llama a `event.preventDefault()` **solo si el foco no está en un `input`/`select`/`textarea`** (`:855`–`:856`). Sin esa guarda, no podrías escribir un espacio en el diálogo. Con ella, el efecto secundario aceptado es que **una barra espaciadora sobre un botón enfocado no lo activa** mientras el foco esté fuera de un campo.
+**DECISION DELIBERADA** — `on_key_down` (`app.py:938`–`862`) marca `space_pressed` y llama a `event.preventDefault()` **solo si el foco no está en un `input`/`select`/`textarea`** (`:855`–`:856`). Sin esa guarda, no podrías escribir un espacio en el diálogo. Con ella, el efecto secundario aceptado es que **una barra espaciadora sobre un botón enfocado no lo activa** mientras el foco esté fuera de un campo.
 
 El desplazamiento en sí (`:702`–`705`) es aritmética de coordenadas de cliente: `pan = pan_al_pulsar + (cliente_actual − cliente_al_pulsar)`. No divide por el zoom, y es correcto: `pan_x`/`pan_y` están en píxeles de pantalla, dentro del `translate` que precede al `scale` (`:234`).
 
 ### Rueda: zoom hacia el cursor
 
-`on_wheel` (`app.py:829`–`831`). Factor 1.12 por muesca (`:821`), recorte a `[0.2, 3.0]` (`:822`). Lo interesante es el anclaje (`:826`–`:830`):
+`on_wheel` (`app.py:896`–`831`). Factor 1.12 por muesca (`:821`), recorte a `[0.2, 3.0]` (`:822`). Lo interesante es el anclaje (`:826`–`:830`):
 
 ```python
 world_x = (local_x - STATE.pan_x) / old_zoom     # punto de mundo bajo el cursor
@@ -435,14 +435,14 @@ Ambos `<g>` (arista y etiqueta) llevan `data-edge-id` (`:249`, `:263`), así que
 
 ## 7. El minimapa
 
-> **Archivos que cubre:** `python/app.py:288`–`339`, `index.html:113`–`118`, reglas `.minimap`, `.minimap-grid`, `.minimap-viewport` de `css/app.css`.
+> **Archivos que cubre:** `python/app.py:354`–`339`, `index.html:147`–`118`, reglas `.minimap`, `.minimap-grid`, `.minimap-viewport` de `css/app.css`.
 > **Qué puedes cambiar aquí:** escala, radios, márgenes, y si quieres hacerlo interactivo.
-> **Qué es intocable y por qué:** el `viewBox="0 0 180 110"` de `index.html:114` está cableado en los recortes de `app.py:333`–`334`; cambiarlo en un solo sitio descuadra el rectángulo del viewport.
+> **Qué es intocable y por qué:** el `viewBox="0 0 180 110"` de `index.html:148` está cableado en los recortes de `app.py:399`–`334`; cambiarlo en un solo sitio descuadra el rectángulo del viewport.
 > **Cómo verificas el cambio:** `python3 scripts/serve.py`, crear nodos muy separados, hacer zoom y comprobar que el rectángulo blanco no se sale del recuadro.
 
-`render_minimap()` (`app.py:288`–`339`), llamado al final de cada `render_canvas()` (`:283`).
+`render_minimap()` (`app.py:354`–`339`), llamado al final de cada `render_canvas()` (`:283`).
 
-- `viewBox` fijo `0 0 180 110` (`index.html:114`), área útil `158 × 88` con 11 px de margen (`app.py:301`–`301`).
+- `viewBox` fijo `0 0 180 110` (`index.html:148`), área útil `158 × 88` con 11 px de margen (`app.py:367`–`301`).
 - Los tramos mínimos de 120 × 80 (`:297`–`:298`) evitan que un grafo de dos nodos se dibuje con una escala absurda.
 - Usa **centros** de nodo (`:305`–`:306`, el `+30` de §5), radio `max(3, 9 * scale)` (`:320`) para que se vean incluso muy alejado.
 - **El rectángulo del viewport** (`:324`–`:339`) es la parte con miga: convierte el pan/zoom a mundo (`world_left = -pan_x / zoom`, `:325`), escala el tamaño del canvas en píxeles (`ancho / zoom * scale`, `:329`) y recorta el resultado a `[1, 179] × [1, 109]` (`:331`–`:334`). El recorte es lo que impide que el rectángulo se salga del recuadro cuando estás mirando una zona vacía lejos del grafo.
@@ -454,7 +454,7 @@ Ambos `<g>` (arista y etiqueta) llevan `data-edge-id` (`:249`, `:263`), así que
 
 ## 8. La gráfica del sweep
 
-> **Archivos que cubre:** `python/app.py:345`–`483` (constantes, ejes, gráfica, tooltip), `index.html:142`–`163`.
+> **Archivos que cubre:** `python/app.py:411`–`483` (constantes, ejes, gráfica, tooltip), `index.html:176`–`163`.
 > **Qué puedes cambiar aquí:** la escala del eje Y, el formato de las marcas, el contenido del tooltip.
 > **Qué es intocable y por qué:** que rejilla y etiquetas se generen en el **mismo** bucle (`:404`–`:410`); el número de divisiones cambia con los datos y separarlos garantiza el desfase.
 > **Cómo verificas el cambio:** `python3 scripts/smoke_ui.py` — su bloque 6 comprueba el eje Y con varios máximos y que la rejilla tenga tantas líneas como marcas.
@@ -464,10 +464,10 @@ El contrato de mensajes del worker y el estado real de la cancelación se explic
 ```mermaid
 sequenceDiagram
     participant W as sweep-worker.js
-    participant OM as on_message app.py:1261
-    participant RC as render_chart app.py:424
-    participant NA as nice_axis app.py:351
-    participant RA as render_chart_axis app.py:397
+    participant OM as on_message app.py:1439
+    participant RC as render_chart app.py:490
+    participant NA as nice_axis app.py:417
+    participant RA as render_chart_axis app.py:463
     participant SVG as svg id=sweep-chart-svg
 
     W->>OM: postMessage type iteration con iteration, totalIterations,<br/>simulationsPerP, done y points de p, mean, ciLow, ciHigh
@@ -485,7 +485,7 @@ sequenceDiagram
 
 ### El marco
 
-`viewBox="0 0 400 320"` fijo (`index.html:143`). Área de datos: `left=44, right=382, top=25, bottom=293` (`app.py:428`). Las dos proyecciones (`:441`–`:445`):
+`viewBox="0 0 400 320"` fijo (`index.html:177`). Área de datos: `left=44, right=382, top=25, bottom=293` (`app.py:494`). Las dos proyecciones (`:441`–`:445`):
 
 ```
 x = 44 + clamp(p, 0, 1) * 338
@@ -494,17 +494,17 @@ y = 293 - (valor / max_y) * 268
 
 **DEUDA CONOCIDA** — El eje X **asume siempre `p` en [0, 1]**: sus tres etiquetas (`0`, `0.5`, `1`) están escritas a mano en `render_chart_axis` (`:411`–`:417`). Es correcto hoy porque el sweep barre probabilidades, pero graficar otra magnitud en X exige tocar esas tres líneas.
 
-### `nice_axis(value)` — `app.py:351`
+### `nice_axis(value)` — `app.py:417`
 
 Devuelve `(tope, divisiones)`. Busca el paso de la forma `{1, 2, 2.5, 5} × 10^k` (`CHART_STEPS`, `:346`) **y** el número de divisiones dentro de `{4, 5, 6}` (`CHART_DIVISIONS`, `:343`) que cubra el dato desperdiciando el menor alto posible, comparando lexicográficamente `(tope, divisiones)` (`:379`) — menor tope primero, y a igualdad menos marcas.
 
 El docstring (`:350`–`:363`) explica el porqué mejor que cualquier paráfrasis: con divisiones fijas en 4, un máximo de 2.5 obligaba a un tope de 4 y la curva ocupaba media gráfica; y escalar por múltiplos del máximo observado producía etiquetas como 1.08 y 0.81. **El tope siempre cubre el dato, así que la curva nunca se sale del marco.** Valor no finito o ≤ 0 devuelve `(1.0, 4)` (`:365`–`:366`), la escala en reposo.
 
-### `axis_label(value)` — `app.py:387`
+### `axis_label(value)` — `app.py:453`
 
 Formatea sin ruido de coma flotante: `0` exacto para el cero (`:388`), notación científica con un decimal fuera de `[1e-4, 1e6)` (`:390`–`:391`), y si no `f"{value:.6f}"` con los ceros y el punto sobrantes recortados (`:392`). Es lo que evita ver `0.250000` o `0.30000000000000004`.
 
-### `render_chart_axis(...)` — `app.py:397`
+### `render_chart_axis(...)` — `app.py:463`
 
 **DECISION DELIBERADA** — Genera la rejilla y las etiquetas en el mismo bucle (`:404`–`:410`):
 
@@ -520,13 +520,13 @@ for index in range(divisions + 1):
 
 Como el número de divisiones **cambia con los datos** (4, 5 o 6), tener dos bucles separados sería garantía de desfase: una etiqueta "0.5" junto a una línea que no está en la mitad. Al salir del mismo `for`, línea y etiqueta comparten la misma `y` por construcción. El `+4` de la etiqueta es el ajuste óptico para centrar el texto sobre la línea.
 
-`index.html:146`–`158` trae cinco líneas y sus etiquetas **escritas a mano**: son solo el estado inicial antes del primer sweep, y se sustituyen íntegras en la primera llamada (`:418`–`:419`). El comentario del HTML (`:144`–`:145`) lo advierte.
+`index.html:180`–`158` trae cinco líneas y sus etiquetas **escritas a mano**: son solo el estado inicial antes del primer sweep, y se sustituyen íntegras en la primera llamada (`:418`–`:419`). El comentario del HTML (`:144`–`:145`) lo advierte.
 
-### `render_chart(points)` — `app.py:424`
+### `render_chart(points)` — `app.py:490`
 
 La banda de confianza es un solo `<path>` cerrado: los `ciHigh` en orden y los `ciLow` **en orden inverso**, más `Z` (`:451`–`:453`). Es la forma estándar de rellenar entre dos curvas con una única figura.
 
-**DEUDA CONOCIDA** — `CHART_MAX_Y` (`app.py:33`) se asigna en `:433` y **no se lee en ningún sitio**. Es una global muerta que aparenta ser la fuente de verdad de la escala del eje Y; la verdadera es el `max_y` local que se pasa a `render_chart_axis` y a `y_coord`.
+**DEUDA CONOCIDA** — `CHART_MAX_Y` (`app.py:40`) se asigna en `:433` y **no se lee en ningún sitio**. Es una global muerta que aparenta ser la fuente de verdad de la escala del eje Y; la verdadera es el `max_y` local que se pasa a `render_chart_axis` y a `y_coord`.
 
 ### El tooltip
 
@@ -536,18 +536,18 @@ La banda de confianza es un solo `<path>` cerrado: los `ciHigh` en orden y los `
 
 ## 9. Los diálogos propios en vez de `prompt` / `confirm`
 
-> **Archivos que cubre:** `python/app.py:62`–`119` (diálogo), `:757` y `:790` (los dos editores), `index.html:179`–`189`, reglas `.app-dialog`, `.app-dialog-backdrop`, `.app-dialog p.error` de `css/app.css`.
+> **Archivos que cubre:** `python/app.py:92`–`119` (diálogo), `:757` y `:790` (los dos editores), `index.html:213`–`189`, reglas `.app-dialog`, `.app-dialog-backdrop`, `.app-dialog p.error` de `css/app.css`.
 > **Qué puedes cambiar aquí:** el marcado y el estilo del diálogo, y añadir diálogos nuevos vía `open_dialog`.
 > **Qué es intocable y por qué:** el contrato del callback — devuelve `True` para cerrar y `False` para quedarse abierto (`:103`). Es toda la razón de existir del diálogo propio; sin él vuelves a `prompt`.
 > **Cómo verificas el cambio:** `python3 scripts/serve.py`, clic en una arista, escribir `5`, Aceptar: debe quedarse abierto, en rojo, con el `5` intacto.
 
-El diálogo es un `<div id="app-dialog">` (el backdrop, `index.html:179`) que envuelve un `<section class="app-dialog">` con `role="dialog"` y `aria-modal="true"` (`index.html:180`), un título, un mensaje, un input y dos botones. Un solo diálogo para toda la aplicación, y un solo callback global (`DIALOG_CALLBACK`, `app.py:31`).
+El diálogo es un `<div id="app-dialog">` (el backdrop, `index.html:213`) que envuelve un `<section class="app-dialog">` con `role="dialog"` y `aria-modal="true"` (`index.html:214`), un título, un mensaje, un input y dos botones. Un solo diálogo para toda la aplicación, y un solo callback global (`DIALOG_CALLBACK`, `app.py:38`).
 
 ### El contrato
 
 ```python
 open_dialog(title, message, callback=None, *, initial="", input_mode=True,
-            accept_label="Aceptar", show_cancel=True)     # app.py:68
+            accept_label="Aceptar", show_cancel=True)     # app.py:98
 ```
 
 `submit_dialog` (`:100`–`104`) define la regla completa:
@@ -560,7 +560,7 @@ if callback is None or callback(value):
 **INVARIANTE** — El callback devuelve `True` para cerrar y `False` para dejar el diálogo abierto:
 
 ```python
-def commit(value: str) -> bool:                    # app.py:808, editor de peso
+def commit(value: str) -> bool:                    # app.py:875, editor de peso
     try:
         parsed = float(value)
     except ValueError:
@@ -588,7 +588,7 @@ Las otras razones, en orden de importancia práctica:
 **DECISION DELIBERADA** — `notify()` (`:115`–`119`) y `clear_graph()` (`:911`–`924`) **siguen usando `window.alert` y `window.confirm`**, envueltos en `try/except`, con el diálogo propio como plan B:
 
 ```python
-def clear_graph(*_args) -> None:                   # app.py:922
+def clear_graph(*_args) -> None:                   # app.py:989
     try:
         if not window.confirm("¿Estás seguro de que quieres limpiar el grafo?"):
             return
@@ -611,12 +611,12 @@ Es decir: **`prompt` está eliminado del proyecto; `alert` y `confirm` no.** El 
 
 ## 10. `bind_events()` y el arranque
 
-> **Archivos que cubre:** `python/app.py:1301`–`1237`, `js/bootstrap.js:67`–`75`, todos los `id` de `index.html`.
+> **Archivos que cubre:** `python/app.py:1483`–`1237`, `js/bootstrap.js:68`–`75`, todos los `id` de `index.html`.
 > **Qué puedes cambiar aquí:** añadir listeners a elementos estáticos nuevos.
 > **Qué es intocable y por qué:** que los 40 `listen()` apunten a elementos que existen en `index.html` desde el principio y que Python nunca reemplaza. Un listener sobre contenido regenerado se pierde en el siguiente render, sin ninguna señal.
 > **Cómo verificas el cambio:** `python3 scripts/smoke_ui.py` para el selector y los campos de parámetros; el resto, a mano en `python3 scripts/serve.py`.
 
-`app.py:1301`–`1230`: **cuarenta llamadas a `listen()`**, una por línea (`:1191`–`:1230`), **todas sobre elementos que existen en `index.html` desde el principio y que Python nunca reemplaza**. Es la contrapartida obligatoria del render por `innerHTML`.
+`app.py:1483`–`1230`: **cuarenta llamadas a `listen()`**, una por línea (`:1191`–`:1230`), **todas sobre elementos que existen en `index.html` desde el principio y que Python nunca reemplaza**. Es la contrapartida obligatoria del render por `innerHTML`.
 
 **INVARIANTE** — Tres contenedores son delegación pura, porque su contenido sí se regenera:
 
@@ -640,7 +640,7 @@ def main() -> None:
     window.graphSimulatorReady = True
 ```
 
-Enganchar, renderizar, encuadrar (con el grafo vacío, `fit_transform` devuelve la identidad) y por último `window.graphSimulatorReady = True`, la bandera que puede usar una prueba externa para saber que la aplicación arrancó. Quien lo llama es `js/bootstrap.js:74`, con `runpy.run_path("/python/app.py", run_name="__main__")` dentro del bloque `pyodide.runPythonAsync` que abre en `:67`.
+Enganchar, renderizar, encuadrar (con el grafo vacío, `fit_transform` devuelve la identidad) y por último `window.graphSimulatorReady = True`, la bandera que puede usar una prueba externa para saber que la aplicación arrancó. Quien lo llama es `js/bootstrap.js:75`, con `runpy.run_path("/python/app.py", run_name="__main__")` dentro del bloque `pyodide.runPythonAsync` que abre en `:67`.
 
 ---
 
@@ -655,34 +655,34 @@ Enganchar, renderizar, encuadrar (con el grafo vacío, `fit_transform` devuelve 
 
 | Invariante | Dónde | Qué pasa si lo rompes |
 |---|---|---|
-| Todo callback que cruce a JS pasa por `retain()` | `app.py:40`, `:44` | La interacción muere en silencio; el error va a la consola, no a la interfaz (§2) |
-| Los listeners van sobre contenedores estáticos, nunca sobre contenido regenerado | `app.py:1303`–`1230` | Funciona hasta el primer render y luego deja de funcionar, sin aviso (§10) |
-| `setPointerCapture` sobre `#graph-canvas`, no sobre el `<g>` del nodo | `app.py:653`, `:658` | El capturador se destruye en el primer render del arrastre y el gesto se corta al primer píxel (§6) |
-| No renderizar dentro de `pointerdown`/`pointerup` sobre un nodo | `app.py:670`, `:663`, `:683` | El navegador deja de emitir `dblclick` y el editor de valor no se abre con ratón físico (§6) |
-| `elementFromPoint` **antes** de vaciar `connection-layer` | `app.py:753` vs `:745` | Con la captura activa `event.target` es el `<svg>`; sin `elementFromPoint` no hay forma de saber el destino (§6) |
+| Todo callback que cruce a JS pasa por `retain()` | `app.py:70`, `:44` | La interacción muere en silencio; el error va a la consola, no a la interfaz (§2) |
+| Los listeners van sobre contenedores estáticos, nunca sobre contenido regenerado | `app.py:1485`–`1230` | Funciona hasta el primer render y luego deja de funcionar, sin aviso (§10) |
+| `setPointerCapture` sobre `#graph-canvas`, no sobre el `<g>` del nodo | `app.py:720`, `:658` | El capturador se destruye en el primer render del arrastre y el gesto se corta al primer píxel (§6) |
+| No renderizar dentro de `pointerdown`/`pointerup` sobre un nodo | `app.py:737`, `:663`, `:683` | El navegador deja de emitir `dblclick` y el editor de valor no se abre con ratón físico (§6) |
+| `elementFromPoint` **antes** de vaciar `connection-layer` | `app.py:820` vs `:745` | Con la captura activa `event.target` es el `<svg>`; sin `elementFromPoint` no hay forma de saber el destino (§6) |
 | `mark_graph_changed()` antes de renderizar en todo handler que edite el grafo | los 7 sitios de §1 | `STATE.initial_graph` queda obsoleto y "Resetear" restaura un grafo que no corresponde |
-| `html.escape()` sobre ids, pesos y valores | `app.py:251`, `:259`, `:263`, `:276`, `:280` | Un JSON importado con `"` o `<` en un id rompe el marcado del canvas |
-| La guarda `data-algorithm` de `render_algorithm_params` | `app.py:172`–`171` | Cada `render_all()` borra lo que el usuario está escribiendo y le quita el foco |
-| Los `id` de `#graph-canvas` y de las cuatro capas | `index.html:91`–`104` | `by_id()` devuelve `None` y el arranque falla sin mensaje útil |
+| `html.escape()` sobre ids, pesos y valores | `app.py:317`, `:259`, `:263`, `:276`, `:280` | Un JSON importado con `"` o `<` en un id rompe el marcado del canvas |
+| La guarda `data-algorithm` de `render_algorithm_params` | `app.py:238`–`171` | Cada `render_all()` borra lo que el usuario está escribiendo y le quita el foco |
+| Los `id` de `#graph-canvas` y de las cuatro capas | `index.html:125`–`104` | `by_id()` devuelve `None` y el arranque falla sin mensaje útil |
 | El par `(±18, −24)` del self-loop es `hypot = 30 = NODE_RADIUS` | `geometry.py:46`–`47` | El bucle despega del borde del círculo si cambias el radio sin recalcularlo |
 
 ### 11.2 DECISIONES DELIBERADAS — se eligieron así, con motivo
 
 | Decisión | Dónde | Motivo |
 |---|---|---|
-| Regenerar el SVG entero en vez de parchearlo | `app.py:233`–`283` | Elimina la clase de bug "DOM y estado desincronizados"; el DOM no guarda estado |
-| `mark_graph_changed()` no actualiza el snapshot si hay simulación | `app.py:194` | Si no, mover un nodo tras simular destruiría el "antes" al que quieres volver |
-| Umbral de 6 px + detector manual de doble clic (750 ms / 14 px) | `app.py:694`, `:722`–`739` | El temblor de un ratón físico entre los dos clics dispararía un arrastre y mataría el `dblclick` |
-| `stroke="transparent"` en `edge-hit`, no `stroke="none"` | `app.py:252` | `none` no recibe clics; `transparent` sí. Es lo que hace clicable una arista de 3 px |
-| La rejilla queda fuera del `transform` | `index.html:100` | Es un fondo fijo, no papel milimetrado que se mueva con el grafo |
-| Ancho de etiqueta estimado tipográficamente | `app.py:262` | Medir con `getBBox()` costaría un reflow por arista y por render |
-| Rejilla y etiquetas del eje en el mismo bucle | `app.py:406`–`410` | Las divisiones cambian con los datos (4/5/6); dos bucles garantizarían el desfase |
-| Diálogo propio con callback booleano | `app.py:68`, `:103` | Permite validar sin perder lo escrito; `prompt` no puede |
-| `alert`/`confirm` nativos con `try/except` y diálogo propio de plan B | `app.py:117`, `:911` | Cubre el entorno que prohíbe diálogos nativos sin reescribir los dos avisos |
-| `event.shiftKey` aceptado junto a `STATE.shift_pressed` | `app.py:650` | Si la ventana perdió el foco, el `keyup` no llegó y el estado quedó desfasado |
-| `preventDefault()` del Espacio solo fuera de campos de formulario | `app.py:866`–`856`, `:860`–`862` | Si no, no se podría escribir un espacio en el diálogo |
-| El peso de arista se guarda como cadena | `app.py:816` | Lo que escribió el usuario es lo que se exporta y se dibuja, sin ruido de coma flotante |
-| El minimapa no es interactivo | `app.py:288`–`339` | Evita añadir un cuarto gesto a la máquina de estados del puntero |
+| Regenerar el SVG entero en vez de parchearlo | `app.py:299`–`283` | Elimina la clase de bug "DOM y estado desincronizados"; el DOM no guarda estado |
+| `mark_graph_changed()` no actualiza el snapshot si hay simulación | `app.py:260` | Si no, mover un nodo tras simular destruiría el "antes" al que quieres volver |
+| Umbral de 6 px + detector manual de doble clic (750 ms / 14 px) | `app.py:761`, `:722`–`739` | El temblor de un ratón físico entre los dos clics dispararía un arrastre y mataría el `dblclick` |
+| `stroke="transparent"` en `edge-hit`, no `stroke="none"` | `app.py:318` | `none` no recibe clics; `transparent` sí. Es lo que hace clicable una arista de 3 px |
+| La rejilla queda fuera del `transform` | `index.html:134` | Es un fondo fijo, no papel milimetrado que se mueva con el grafo |
+| Ancho de etiqueta estimado tipográficamente | `app.py:328` | Medir con `getBBox()` costaría un reflow por arista y por render |
+| Rejilla y etiquetas del eje en el mismo bucle | `app.py:472`–`410` | Las divisiones cambian con los datos (4/5/6); dos bucles garantizarían el desfase |
+| Diálogo propio con callback booleano | `app.py:98`, `:103` | Permite validar sin perder lo escrito; `prompt` no puede |
+| `alert`/`confirm` nativos con `try/except` y diálogo propio de plan B | `app.py:147`, `:911` | Cubre el entorno que prohíbe diálogos nativos sin reescribir los dos avisos |
+| `event.shiftKey` aceptado junto a `STATE.shift_pressed` | `app.py:717` | Si la ventana perdió el foco, el `keyup` no llegó y el estado quedó desfasado |
+| `preventDefault()` del Espacio solo fuera de campos de formulario | `app.py:933`–`856`, `:860`–`862` | Si no, no se podría escribir un espacio en el diálogo |
+| El peso de arista se guarda como cadena | `app.py:883` | Lo que escribió el usuario es lo que se exporta y se dibuja, sin ruido de coma flotante |
+| El minimapa no es interactivo | `app.py:354`–`339` | Evita añadir un cuarto gesto a la máquina de estados del puntero |
 
 ### 11.3 DEUDA CONOCIDA — está mal, se sabe, no lo "arregles" sin leer
 
@@ -690,7 +690,7 @@ Enganchar, renderizar, encuadrar (con el grafo vacío, `fit_transform` devuelve 
 
 Cuatro casos, todos con la misma raíz: **el marcado generado en Python y las reglas de `css/app.css` no están de acuerdo**. Ninguno lanza error; simplemente falta algo en pantalla. **Ninguno es una regresión del refactor: el respaldo previo se comporta igual.**
 
-**1. Los colores de arista de `edge_style()` no llegan nunca.** `render_canvas` escribe el color y el grosor como **atributos de presentación** (`app.py:253`–`252`):
+**1. Los colores de arista de `edge_style()` no llegan nunca.** `render_canvas` escribe el color y el grosor como **atributos de presentación** (`app.py:319`–`252`):
 
 ```python
 f'<path class="edge-path" d="{geometry["path"]}" fill="none" stroke="{color}" '
@@ -699,26 +699,26 @@ f'stroke-width="{width}"{marker}></path>'
 
 Pero `css/app.css` contiene la regla `.edge-path { fill: none; stroke: #6c6690; stroke-linecap: round; stroke-width: 3; }`. En CSS, **un atributo de presentación tiene especificidad 0 y pierde contra cualquier regla con selector**. La redacción correcta y única de este hecho:
 
-- Hoy **todas** las aristas se pintan `#6c6690` con grosor 3, sin importar lo que devuelva `edge_style()` (`app.py:221`–`228`).
+- Hoy **todas** las aristas se pintan `#6c6690` con grosor 3, sin importar lo que devuelva `edge_style()` (`app.py:287`–`228`).
 - Los cuatro estados —`updated` (naranja `#F4B45C`), `delivered` (morado `#7A6E9E`), `quiet` (`#413A5E`), y la arista seleccionada (`#6E7CF2`)— **no se distinguen en pantalla**.
-- Lo único que sí se ve tras simular es la **animación de guiones**, porque llega por **clase** (`edge-animated`, `app.py:251`) y la regla `.edge-animated .edge-path` sí gana.
+- Lo único que sí se ve tras simular es la **animación de guiones**, porque llega por **clase** (`edge-animated`, `app.py:317`) y la regla `.edge-animated .edge-path` sí gana.
 - Las reglas `.edge-path.is-selected`, `.is-updated`, `.is-delivered` y `.is-idle` existen en el CSS con **exactamente esos cuatro colores** y están **muertas**, porque `render_canvas` nunca emite esas clases. El diseño original era por clases; el código emite atributos y las neutralizó.
 
 La corrección correcta es que `edge_style()` devuelva la clase `is-*` en lugar del color, **no** añadir `style=""` en línea.
 
-> Dos textos del repositorio contradicen esto y hay que corregirlos al tocarlo: `docs/06-formatos-flujos-y-detalles.md:200` da por hecho que los atributos en línea son los que mandan (es al revés), y `render_controls` anuncia «aristas verdes = propagación» (`app.py:519`) — un color que `edge_style` no devuelve y que, aunque lo devolviera, tampoco se pintaría.
+> Dos textos del repositorio contradicen esto y hay que corregirlos al tocarlo: `docs/06-formatos-flujos-y-detalles.md:200` da por hecho que los atributos en línea son los que mandan (es al revés), y `render_controls` anuncia «aristas verdes = propagación» (`app.py:586`) — un color que `edge_style` no devuelve y que, aunque lo devolviera, tampoco se pintaría.
 
-**2. La línea de previsualización al conectar es invisible.** `on_canvas_pointer_move` inserta `<path class="connection-line" d="M ... L ...">` (`app.py:709`–`700`). **No existe ninguna regla `.connection-line` ni `.connection-layer` en `css/app.css`** (verificado: cero coincidencias). Sin CSS, un `<path>` SVG toma los valores por defecto `fill: black; stroke: none`; un trazo de dos puntos tiene área cero, así que no se pinta nada. El gesto de Shift+arrastrar funciona perfectamente —la arista se crea— pero **no se ve la goma elástica**. La única realimentación es el cursor de cruz y el indicador de la barra lateral. Efecto lateral que hoy nos conviene: como el `<path>` no se pinta, tampoco intercepta el `elementFromPoint` de `:742`. **Si le pones una regla, comprueba que lleve `pointer-events: none`.**
+**2. La línea de previsualización al conectar es invisible.** `on_canvas_pointer_move` inserta `<path class="connection-line" d="M ... L ...">` (`app.py:776`–`700`). **No existe ninguna regla `.connection-line` ni `.connection-layer` en `css/app.css`** (verificado: cero coincidencias). Sin CSS, un `<path>` SVG toma los valores por defecto `fill: black; stroke: none`; un trazo de dos puntos tiene área cero, así que no se pinta nada. El gesto de Shift+arrastrar funciona perfectamente —la arista se crea— pero **no se ve la goma elástica**. La única realimentación es el cursor de cruz y el indicador de la barra lateral. Efecto lateral que hoy nos conviene: como el `<path>` no se pinta, tampoco intercepta el `elementFromPoint` de `:742`. **Si le pones una regla, comprueba que lleve `pointer-events: none`.**
 
-**3. Las aristas del minimapa son invisibles.** `render_minimap` genera `<line>` sin atributo `stroke` (`app.py:317`) y no hay regla para `#minimap-edges line` (cero coincidencias en `css/app.css`). El `stroke` por defecto es `none`. El minimapa muestra los nodos y el rectángulo del viewport; las aristas se calculan y se descartan.
+**3. Las aristas del minimapa son invisibles.** `render_minimap` genera `<line>` sin atributo `stroke` (`app.py:383`) y no hay regla para `#minimap-edges line` (cero coincidencias en `css/app.css`). El `stroke` por defecto es `none`. El minimapa muestra los nodos y el rectángulo del viewport; las aristas se calculan y se descartan.
 
-**4. Seleccionar un nodo no cambia nada.** `render_canvas` añade la clase `selected` al `<g>` (`app.py:276`) y **no hay ninguna regla `.graph-node.selected`** en el CSS (cero coincidencias). Combinado con que `on_canvas_pointer_down` no renderiza al tocar un nodo (§6), la selección es completamente invisible — y sin embargo es lo que decide qué borra la tecla `Delete` (`:864`).
+**4. Seleccionar un nodo no cambia nada.** `render_canvas` añade la clase `selected` al `<g>` (`app.py:342`) y **no hay ninguna regla `.graph-node.selected`** en el CSS (cero coincidencias). Combinado con que `on_canvas_pointer_down` no renderiza al tocar un nodo (§6), la selección es completamente invisible — y sin embargo es lo que decide qué borra la tecla `Delete` (`:864`).
 
 #### Estado y ciclo de vida
 
 - **`PROXIES` (`app.py:22`) nunca se vacía.** Los `retain()` dentro de handlers (exportar JSON, importar, cada sweep) acumulan proxies mientras dure la sesión. Fuga pequeña pero real; el arreglo va en `retain()`, no en quitarlo (§2).
-- **`CHART_MAX_Y` (`app.py:33`) se asigna en `:433` y no se lee en ninguna parte.** Global muerta que aparenta ser la fuente de verdad de la escala del eje Y.
-- **La rama `kind == "loading"` de `on_message` (`app.py:1278`–`1168`) es inalcanzable** y no hay rama para `cancelled`. El mensaje "Cargando motor Python del sweep…" que sí se ve lo escribe `start_sweep` en `:1143`. Qué pasa hoy realmente al pulsar "Detener" se explica en [05 — el barrido](05-barrido-sweep.md).
+- **`CHART_MAX_Y` (`app.py:40`) se asigna en `:433` y no se lee en ninguna parte.** Global muerta que aparenta ser la fuente de verdad de la escala del eje Y.
+- **La rama `kind == "loading"` de `on_message` (`app.py:1460`–`1168`) es inalcanzable** y no hay rama para `cancelled`. El mensaje "Cargando motor Python del sweep…" que sí se ve lo escribe `start_sweep` en `:1143`. Qué pasa hoy realmente al pulsar "Detener" se explica en [05 — el barrido](05-barrido-sweep.md).
 - **No hay deshacer** en ninguna operación destructiva (`Delete` en `:863`–`875`, "Limpiar Grafo" en `:911`).
 
 #### Coordenadas y geometría
@@ -727,15 +727,15 @@ La corrección correcta es que `edge_style()` devuelva la clase `is-*` en lugar 
 - **`value_color` recorta a [0,1]** (`geometry.py:27`): valores fuera del rango se ven todos iguales, y `NaN` cae a azul sin color de error.
 - **El zoom se recorta a `[0.2, 3.0]` con la rueda y los botones pero a `[0.2, 2.0]` en `fit_transform`** (`geometry.py:107`): "ajustar vista" puede alejar más de lo esperado.
 - **`edge_geometry` dibuja un bucle cuando dos nodos distintos están superpuestos** (`geometry.py:44`), no solo con aristas a sí mismo.
-- **Aristas paralelas en el mismo sentido se superponen** (`has_reverse` solo detecta el par inverso, `geometry.py:90`) y `apply_propagation` (`app.py:1039`) las empareja por `(source, target)`, dándoles el mismo resaltado.
+- **Aristas paralelas en el mismo sentido se superponen** (`has_reverse` solo detecta el par inverso, `geometry.py:90`) y `apply_propagation` (`app.py:1106`) las empareja por `(source, target)`, dándoles el mismo resaltado.
 - **`render_canvas` es O(N + E²) y corre en cada `pointermove`** del arrastre, más un `getBoundingClientRect()` que fuerza layout síncrono (§4).
 
 #### Interfaz y mensajes
 
-- **`index.html:81` promete «Shift mientras arrastras un nodo: snap a múltiplos de 10».** No existe: el arrastre no redondea, y `Shift` + `pointerdown` sobre un nodo entra en modo conectar (`app.py:650`), así que la combinación ni siquiera es alcanzable. Hay que implementarla o borrar la línea. `docs/06-formatos-flujos-y-detalles.md:179` ya lo señala, pero cita `index.html:85`; la línea real hoy es la **81**.
+- **`index.html:115` promete «Shift mientras arrastras un nodo: snap a múltiplos de 10».** No existe: el arrastre no redondea, y `Shift` + `pointerdown` sobre un nodo entra en modo conectar (`app.py:717`), así que la combinación ni siquiera es alcanzable. Hay que implementarla o borrar la línea. `docs/06-formatos-flujos-y-detalles.md:179` ya lo señala, pero cita `index.html:119`; la línea real hoy es la **81**.
 - **`Escape` no cierra los diálogos sin input**, y no hay trampa de foco (§9).
-- **`keydown`/`keyup` están sobre `window`** (`app.py:1315`–`1204`), así que escribir una mayúscula en el diálogo enciende el indicador de "Modo: Conectar nodos".
-- **El minimapa deja el rectángulo del viewport con el tamaño anterior** cuando el grafo se queda sin nodos (`app.py:294`).
+- **`keydown`/`keyup` están sobre `window`** (`app.py:1497`–`1204`), así que escribir una mayúscula en el diálogo enciende el indicador de "Modo: Conectar nodos".
+- **El minimapa deja el rectángulo del viewport con el tamaño anterior** cuando el grafo se queda sin nodos (`app.py:360`).
 
 ---
 
@@ -748,13 +748,13 @@ La corrección correcta es que `edge_style()` devuelva la clase `is-*` en lugar 
 
 | Quiero... | Voy a | Verifico con |
 |---|---|---|
-| Añadir un control a la barra lateral | `index.html` (marcado con un `id` nuevo) + `listen(...)` en `bind_events()` (`app.py:1301`) + una línea en `render_controls()` (`:492`) | recorrido visual |
+| Añadir un control a la barra lateral | `index.html` (marcado con un `id` nuevo) + `listen(...)` en `bind_events()` (`app.py:1483`) + una línea en `render_controls()` (`:492`) | recorrido visual |
 | Cambiar la paleta de valores | `V0` / `V1` en `geometry.py:12`–`13` | `python3 scripts/smoke_ui.py` + visual |
 | Cambiar la forma de las aristas | `edge_geometry` (`geometry.py:38`); si cambias `NODE_RADIUS`, recalcula el par `(18, 24)` del bucle (`:46`–`:47`) | visual con un self-loop |
 | Que la selección se vea | Añadir `.graph-node.selected .node-circle { ... }` a `css/app.css` **y** renderizar en `on_canvas_pointer_down` sin romper el `dblclick` (§6) | doble clic con ratón físico |
-| Que los colores de simulación se vean | Hacer que `edge_style()` (`app.py:221`) devuelva la clase `is-*` y usarla en el marcado (`:249`, `:251`); las cuatro reglas ya existen en el CSS | simular y comparar con `.is-updated` |
-| Cambiar la escala de la gráfica | `CHART_DIVISIONS` / `CHART_STEPS` (`app.py:345`, `:346`); el marco está en `:426` | `python3 scripts/smoke_ui.py` (bloque 6) |
-| Añadir un campo al sweep | `index.html:126`–`137` + `positive_int(...)` en `start_sweep` (`app.py:1247`–`1138`) + `set_sweep_inputs_disabled` (`:1107`) | ejecutar un sweep corto |
-| Un diálogo nuevo | `open_dialog(...)` (`app.py:68`) con un callback que devuelva `True`/`False`; **nunca** `prompt` | probar el camino de error |
-| Un callback que cruce a JS | Envolverlo en `retain()` (`app.py:40`). Siempre. | recorrido visual: el smoke test no lo ve |
-| Añadir un algoritmo | Para que funcione en la **app** basta `python/simulation/algorithms.py`: el `<select>` y los campos se generan solos desde el registro (`app.py:151`, `:161`). Pero el **arnés no lo cubrirá**: la tupla `ALGORITMOS = ("fv", "amp")` de `scripts/equivalencia.py:187` decide qué algoritmos se capturan, y hay que añadirlo ahí. Detalle completo en [06 — registro de algoritmos](06-registro-algoritmos.md) y [07 — verificación](07-verificacion.md) | `python3 scripts/smoke_ui.py` y luego `python3 scripts/equivalencia.py` |
+| Que los colores de simulación se vean | Hacer que `edge_style()` (`app.py:287`) devuelva la clase `is-*` y usarla en el marcado (`:249`, `:251`); las cuatro reglas ya existen en el CSS | simular y comparar con `.is-updated` |
+| Cambiar la escala de la gráfica | `CHART_DIVISIONS` / `CHART_STEPS` (`app.py:411`, `:346`); el marco está en `:426` | `python3 scripts/smoke_ui.py` (bloque 6) |
+| Añadir un campo al sweep | `index.html:160`–`137` + `positive_int(...)` en `start_sweep` (`app.py:1425`–`1138`) + `set_sweep_inputs_disabled` (`:1107`) | ejecutar un sweep corto |
+| Un diálogo nuevo | `open_dialog(...)` (`app.py:98`) con un callback que devuelva `True`/`False`; **nunca** `prompt` | probar el camino de error |
+| Un callback que cruce a JS | Envolverlo en `retain()` (`app.py:70`). Siempre. | recorrido visual: el smoke test no lo ve |
+| Añadir un algoritmo | Para que funcione en la **app** basta `python/simulation/algorithms.py`: el `<select>` y los campos se generan solos desde el registro (`app.py:181`, `:161`). Pero el **arnés no lo cubrirá**: la tupla `ALGORITMOS = ("fv", "amp")` de `scripts/equivalencia.py:187` decide qué algoritmos se capturan, y hay que añadirlo ahí. Detalle completo en [06 — registro de algoritmos](06-registro-algoritmos.md) y [07 — verificación](07-verificacion.md) | `python3 scripts/smoke_ui.py` y luego `python3 scripts/equivalencia.py` |

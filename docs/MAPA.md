@@ -87,7 +87,7 @@ flowchart TB
                 CSS["css/app.css · 79 L de reglas COMPRIMIDAS<br/>se cita por SELECTOR, nunca por línea"]
             end
             subgraph C2["CAPA 2 · Arranque JS — el único JavaScript de la app"]
-                BOOT["js/bootstrap.js · 88 L<br/>PYTHON_FILES = 9 archivos :4-14<br/>startApplication :52"]
+                BOOT["js/bootstrap.js · 89 L<br/>PYTHON_FILES = 10 archivos :4-14<br/>startApplication :52"]
             end
             subgraph C3["CAPA 3 · Controlador Python — la única que toca el DOM"]
                 APP["python/app.py · 1241 L<br/>STATE = AppState :22 · render SVG<br/>bind_events :1189 con 40 listen"]
@@ -98,7 +98,7 @@ flowchart TB
 
         subgraph WK["WEB WORKER — se crea al pulsar «Ejecutar sweep» y se destruye al terminar"]
             direction TB
-            SWJS["js/sweep-worker.js · 102 L<br/>SWEEP_FILES = 6 archivos :4-11<br/>onmessage :69"]
+            SWJS["js/sweep-worker.js · 168 L<br/>SWEEP_FILES = 7 archivos :4-11<br/>onmessage :69"]
         end
 
         subgraph C4["CAPA 4 · NÚCLEO PURO — NumPy, cero DOM, cero js · se monta en LOS DOS runtimes"]
@@ -123,7 +123,7 @@ flowchart TB
         BOOT -- "runpy.run_path :74 ejecuta app.py<br/>con run_name de programa principal" --> APP
         APP --> MOD
         APP --> GEO
-        APP -- "postMessage ronda · app.py:1080" --> ENG
+        APP -- "postMessage ronda · app.py:1158" --> ENG
         APP -- "Worker.new :1144 + postMessage :1176<br/>SOLO JSON cruza" --> SWJS
         SWJS -- "iter_sweep :86-94" --> SWP
         APP -- "escribe innerHTML del SVG" --> HTML
@@ -144,8 +144,8 @@ Cuatro lecturas que ahorran horas:
    navegador; la capa 3 es la única que importa `js` y `pyodide.ffi`
    (`python/app.py:13-14`). Por eso el sweep puede correr en un Worker sin DOM.
    **INVARIANTE.**
-2. **El Worker monta 6 archivos y no 9** (`js/sweep-worker.js:4-11` contra
-   `js/bootstrap.js:4-14`): sin `app.py`, `models.py` ni `geometry.py`.
+2. **El Worker monta 7 archivos y no 10** (`js/sweep-worker.js:4-12` contra
+   `js/bootstrap.js:4-15`): sin `app.py`, `models.py` ni `geometry.py`.
    **DECISIÓN DELIBERADA** — es un candado arquitectónico: si algún día
    `sweep.py` importara `models.py`, el Worker fallaría al instante, y eso es
    exactamente lo que se busca.
@@ -166,8 +166,8 @@ Cuatro lecturas que ahorran horas:
 
 > **Archivos que cubre:** `index.html`, `js/bootstrap.js`, `js/sweep-worker.js`, `python/app.py`, `python/simulation/engine.py`, `python/simulation/sweep.py`.
 > **Qué puedes cambiar aquí:** nada — son siluetas. El detalle de cada paso vive en las secciones 01, 04 y 05, enlazadas en cada flujo.
-> **Qué es intocable y por qué:** el orden `bind_events() → render_all() → fit_view()` de `main()` (`app.py:1345-1350`) — **INVARIANTE**: `fit_view` mide el SVG ya dibujado; invertirlo deja el encuadre calculado sobre un lienzo vacío.
-> **Cómo verificas el cambio:** `python3 scripts/serve.py`, abrir `http://localhost:8000`, y comprobar en la consola que `window.graphSimulatorReady === true` (`app.py:1350`).
+> **Qué es intocable y por qué:** el orden `bind_events() → render_all() → fit_view()` de `main()` (`app.py:1528-1533`) — **INVARIANTE**: `fit_view` mide el SVG ya dibujado; invertirlo deja el encuadre calculado sobre un lienzo vacío.
+> **Cómo verificas el cambio:** `python3 scripts/serve.py`, abrir `http://localhost:8000`, y comprobar en la consola que `window.graphSimulatorReady === true` (`app.py:1533`).
 
 ### 2.1 Arranque — de abrir la página a la app viva
 
@@ -182,12 +182,12 @@ sequenceDiagram
     participant PY as Pyodide · runtime 1
     participant APP as python/app.py
 
-    NAV->>BS: index.html:192 carga el módulo ES
+    NAV->>BS: index.html:226 carga el módulo ES
     BS->>NAV: showRuntimeState "loading" :19 — overlay #python-loader
     par en paralelo, a propósito
         BS->>CDN: loadPyodide :56 + loadPackage numpy :60
     and
-        BS->>NAV: fetch de los 9 PYTHON_FILES :4-14 vía fetchPythonFile :31
+        BS->>NAV: fetch de los 10 PYTHON_FILES :4-14 vía fetchPythonFile :31
     end
     BS->>PY: mountPythonFiles :44 — escribe en /python del FS virtual
     BS->>PY: runpy.run_path de "/python/app.py" como programa principal :74
@@ -199,7 +199,7 @@ sequenceDiagram
 ```
 
 **INVARIANTE** — cada callback que se pasa al DOM tiene que ir envuelto en
-`retain()` (`app.py:40`, usado desde `listen()` en `app.py:46`). Un proxy no
+`retain()` (`app.py:70`, usado desde `listen()` en `app.py:76`). Un proxy no
 retenido lo recolecta Python y el listener muere **sin ningún error visible**:
 el botón simplemente deja de responder. Es el fallo más caro de diagnosticar del
 proyecto ([03 §2](03-interfaz.md)).
@@ -234,15 +234,15 @@ sequenceDiagram
 **DEUDA CONOCIDA (previa al refactor, verificada también en el respaldo
 anterior)** — el **color** que decide `apply_propagation` no llega a la pantalla.
 `render_canvas` escribe el color de arista como **atributo de presentación**
-(`stroke="…"` en `app.py:253-254`), y en CSS cualquier regla vence a un atributo
+(`stroke="…"` en `app.py:319-320`), y en CSS cualquier regla vence a un atributo
 de presentación. Como existe la regla `.edge-path { stroke:#6c6690;
 stroke-width:3 }`, **todas** las aristas se pintan igual y los cuatro estados de
-`edge_style()` (`app.py:221`: `updated` / `delivered` / `quiet` / seleccionada)
+`edge_style()` (`app.py:287`: `updated` / `delivered` / `quiet` / seleccionada)
 no se distinguen en pantalla. Las reglas `.edge-path.is-updated`,
 `.is-delivered`, `.is-idle` y `.is-selected` existen en el CSS pero están
 **muertas**, porque `render_canvas` nunca emite esas clases. Lo único que sí se
 ve tras simular es la animación punteada, vía `.edge-animated .edge-path`,
-porque esa clase sí se emite (`app.py:251`). No lo "arregles" a ciegas: el
+porque esa clase sí se emite (`app.py:317`). No lo "arregles" a ciegas: el
 diagnóstico completo y las dos formas de repararlo están en
 [09 §C](09-invariantes-y-deuda.md).
 
@@ -282,16 +282,16 @@ sequenceDiagram
 Tres cosas que sorprenden la primera vez:
 
 - **Cada barrido vuelve a descargar Pyodide y NumPy.** `finish_sweep`
-  (`app.py:1291`) y `stop_sweep` (`app.py:1226`) llaman a `WORKER.terminate()`,
+  (`app.py:1473`) y `stop_sweep` (`app.py:1403`) llaman a `WORKER.terminate()`,
   así que el runtime 2 se destruye entero. Con caché caliente es rápido; sin red,
   el segundo sweep falla. La frase "todo corre en el navegador" es cierta para el
   **cálculo**, no para la **carga**.
 - **«Detener» hoy es exactamente `terminate()`.** `CancellationToken`
   (`sweep.py:41`), `is_cancelled` (`:59`) y los `_check_cancelled` (`:78`)
   existen y están probados, pero el Worker llama a `iter_sweep`
-  **sin** el argumento `cancel` (`js/sweep-worker.js:107-115`), de modo que el
+  **sin** el argumento `cancel` (`js/sweep-worker.js:129-137`), de modo que el
   evento `cancelled` es inalcanzable. Es API preparada y no cableada, no un bug.
-- **El evento `type:"end"` lo emite el JS del Worker** (`js/sweep-worker.js:132`),
+- **El evento `type:"end"` lo emite el JS del Worker** (`js/sweep-worker.js:162`),
   no `iter_sweep`. Buscarlo en el Python es perder media hora.
 
 ---
@@ -307,8 +307,8 @@ Tres cosas que sorprenden la primera vez:
 |---|---|---|
 | `index.html` (194 L) | Esqueleto y **contrato de `id`s**: cada `by_id("…")` de `app.py` espera un `id` que existe aquí. Carga `js/bootstrap.js` como módulo ES en `:192`. | [01](01-arranque.md) |
 | `css/app.css` (79 L) | Todo el estilo. **Reglas comprimidas en líneas gigantes: se cita por selector** (`.edge-path`, `.python-loader`, `.edge-animated .edge-path`), nunca por número de línea. | [03](03-interfaz.md) |
-| `js/bootstrap.js` (88 L) | Descarga Pyodide, monta los **9** `.py` en el FS virtual y ejecuta `app.py` como `__main__`. Controla el overlay de carga. | [01](01-arranque.md) |
-| `js/sweep-worker.js` (102 L) | Segundo runtime Pyodide dentro de un Web Worker. Monta **6** `.py` (solo `simulation/`), corre `iter_sweep` y reenvía cada evento con `postMessage`. | [05](05-barrido-sweep.md) |
+| `js/bootstrap.js` (89 L) | Descarga Pyodide, monta los **10** `.py` en el FS virtual y ejecuta `app.py` como `__main__`. Controla el overlay de carga. | [01](01-arranque.md) |
+| `js/sweep-worker.js` (168 L) | Segundo runtime Pyodide dentro de un Web Worker. Monta **7** `.py` (solo `simulation/`), corre `iter_sweep` y reenvía cada evento con `postMessage`. | [05](05-barrido-sweep.md) |
 | `python/app.py` (1241 L) | El controlador. Único archivo que importa `js` y `pyodide.ffi`. Estado (`STATE`), render del SVG por `innerHTML`, 40 listeners, diálogos, gráfica del sweep. | [03](03-interfaz.md) |
 | `python/models.py` (140 L) | Las dataclasses: `Node` `:11`, `Edge` `:37`, `GraphTab` `:64`, `SimulationState` `:83`, `AppState` `:90`. Y `graph_data()` `:71`, el puente al JSON del motor. | [02](02-modelo-de-datos.md) |
 | `python/geometry.py` (110 L) | Matemática de dibujo sin DOM: `node_center` `:34`, `edge_geometry` `:38`, `fit_transform` `:97`, `value_color` `:20`. | [03](03-interfaz.md) |
@@ -373,15 +373,16 @@ comprobación en [08 §4](08-despliegue.md).
 
 | Quiero… | Leo… | Toco… | Verifico con… |
 |---|---|---|---|
+| **Probar un algoritmo sin tocar el repositorio** | [06 §8bis](06-registro-algoritmos.md) | **Nada.** Se elige «Algoritmo propio…» en el selector y se escribe en la caja: el fuente viaja con cada simulación y se compila dentro del Worker (`python/simulation/usuario.py`). La clave se fuerza a `user_alg`, así que no puede tapar a `fv` ni a `amp`; `batch` sigue siendo opcional y `params` se rechaza con un mensaje que explica por qué. | En la caja misma: un fallo muestra el traceback recortado a las líneas de tu código. Si no termina, a los 15 s se mata el motor y se avisa. |
 | **Agregar un algoritmo** | [06](06-registro-algoritmos.md), después [07 §9](07-verificacion.md) | **Dos archivos.** Para que funcione **en la app** basta `python/simulation/algorithms.py`: escribes las funciones, llamas a `register(AlgorithmSpec(...))` y el `<select>`, el motor individual y el sweep lo recogen solos. **Pero el arnés no lo cubrirá**: los 1026 casos recorren la tupla `ALGORITMOS = ("fv", "amp")` de `scripts/equivalencia.py:187`, así que hay que agregar ahí su clave y **después** regrabar la línea base. | `PYTHONDONTWRITEBYTECODE=1 python3 scripts/equivalencia.py` → debe seguir diciendo `OK`; luego `--grabar` (esta regrabación **sí** es legítima: agrega claves nuevas sin alterar las viejas) y comprobar que los 1026 casos previos conservan su valor. Después `python3 scripts/smoke_ui.py`. |
 | **Cambiar la matemática de una ronda** | [04](04-simulacion-individual.md), después [07 §4](07-verificacion.md) | `python/simulation/engine.py` (`run_round` `:179`, `who_gets_message` `:83`) o `python/simulation/algorithms.py`. | `PYTHONDONTWRITEBYTECODE=1 python3 scripts/equivalencia.py` **antes y después**. Si falla, eso **es** el hallazgo: nunca `--grabar` para taparlo. |
-| **Cambiar el barrido** | [05](05-barrido-sweep.md) | `python/simulation/sweep.py`. Si cambias el contrato de eventos, también `on_message` en `python/app.py:1261`; si cambias los argumentos, también `js/sweep-worker.js:107-115`. | `PYTHONDONTWRITEBYTECODE=1 python3 scripts/equivalencia.py` (el arnés cubre `iter_sweep`), y un sweep corto en el navegador: 21 puntos, 200 sims, 5 iteraciones, viendo `#sweep-status` avanzar de `Iteración 1/5` a `5/5`. |
-| **Cambiar cómo se dibuja algo** | [03 §4-§5](03-interfaz.md), y [09 §C](09-invariantes-y-deuda.md) antes de tocar aristas | `render_canvas` `python/app.py:233`, `render_minimap` `:286`, `render_chart` `:422`, o `python/geometry.py`. Ojo: **el color de arista hoy no llega a la pantalla** (ver flujo 2.2). | `python3 scripts/smoke_ui.py` y recorrido visual en `http://localhost:8000`: crear dos nodos, conectarlos con Shift, simular, y mirar el resultado con las herramientas de desarrollo. |
+| **Cambiar el barrido** | [05](05-barrido-sweep.md) | `python/simulation/sweep.py`. Si cambias el contrato de eventos, también `on_message` en `python/app.py:1439`; si cambias los argumentos, también `js/sweep-worker.js:129-137`. | `PYTHONDONTWRITEBYTECODE=1 python3 scripts/equivalencia.py` (el arnés cubre `iter_sweep`), y un sweep corto en el navegador: 21 puntos, 200 sims, 5 iteraciones, viendo `#sweep-status` avanzar de `Iteración 1/5` a `5/5`. |
+| **Cambiar cómo se dibuja algo** | [03 §4-§5](03-interfaz.md), y [09 §C](09-invariantes-y-deuda.md) antes de tocar aristas | `render_canvas` `python/app.py:299`, `render_minimap` `:286`, `render_chart` `:422`, o `python/geometry.py`. Ojo: **el color de arista hoy no llega a la pantalla** (ver flujo 2.2). | `python3 scripts/smoke_ui.py` y recorrido visual en `http://localhost:8000`: crear dos nodos, conectarlos con Shift, simular, y mirar el resultado con las herramientas de desarrollo. |
 | **Cambiar el tema visual** | [03](03-interfaz.md) | `css/app.css`, **por selector**: `.edge-path`, `.edge-animated .edge-path`, `.python-loader`, `.python-loader.is-ready`, `.graph-node`. El archivo tiene las reglas comprimidas en líneas enormes: no lo edites por número de línea. | Recorrido visual en `http://localhost:8000`, en editor y en la vista de análisis. Comprueba también el overlay de carga: **DEUDA CONOCIDA** — no hay regla para `[data-state="error"]`, así que un arranque fallido se ve igual que uno cargando. |
 | **Agregar un control a la interfaz** | [01 §2](01-arranque.md) y [03 §10](03-interfaz.md) | `index.html` (el `id` nuevo) **y** `python/app.py`: la función manejadora más una línea `listen(by_id("…"), "evento", manejador)` dentro de `bind_events()` (`:1189`, hoy 40 llamadas entre `:1191` y `:1230`). **INVARIANTE**: pasa siempre por `listen`/`retain`; un callback sin retener muere en silencio. | `python3 scripts/smoke_ui.py` y clic real en el navegador. Si el control no responde y **no** hay error en consola, sospecha del proxy no retenido antes que de tu lógica. |
-| **Agregar un archivo `.py`** | [01 §7](01-arranque.md) | El archivo nuevo **y** la lista que corresponda: `PYTHON_FILES` en `js/bootstrap.js:4-14` siempre; además `SWEEP_FILES` en `js/sweep-worker.js:4-11` **solo** si vive en `python/simulation/` y el sweep lo necesita. No hay descubrimiento automático. | Recargar `http://localhost:8000`: si falta en la lista, el overlay se queda cargando y la consola muestra `ModuleNotFoundError`. Para el Worker, correr un sweep corto. |
+| **Agregar un archivo `.py`** | [01 §7](01-arranque.md) | El archivo nuevo **y** la lista que corresponda: `PYTHON_FILES` en `js/bootstrap.js:4-15` siempre; además `SWEEP_FILES` en `js/sweep-worker.js:4-12` **solo** si vive en `python/simulation/` y el sweep lo necesita. No hay descubrimiento automático. | Recargar `http://localhost:8000`: si falta en la lista, el overlay se queda cargando y la consola muestra `ModuleNotFoundError`. Para el Worker, correr un sweep corto. |
 | **Cambiar la versión de Pyodide** | [00 §7](00-empezar-aqui.md) y [07](07-verificacion.md) | **Cuatro sitios escritos a mano:** `js/bootstrap.js:1` y `:3`, `js/sweep-worker.js:1` y `:3`. Cambiar tres de cuatro deja la app en una versión y el sweep en otra. | `grep -rn "314.0.2" js/ index.html python/ scripts/ .github/` debe devolver exactamente 4 líneas. **INVARIANTE**: un cambio de Pyodide arrastra un cambio de NumPy y la línea base compara flotantes **exactos**, así que hay que revalidar la simulación completa antes de publicar. |
-| **Cambiar los límites del sweep** (puntos de p, simulaciones, iteraciones, rondas) | [05 §3](05-barrido-sweep.md) y [00 §7](00-empezar-aqui.md) | **Dos sitios sin nada que los sincronice**: los atributos de los `<input>` en `index.html:127-136` y las cuatro llamadas a `_validated_int` (definido en `python/simulation/sweep.py:245`) dentro de `_prepare_sweep`, en `sweep.py:275-280`. **DEUDA CONOCIDA** — además `positive_int` (`app.py:1212`) solo aplica el mínimo, no el máximo: el techo real lo impone el Worker y el exceso llega como texto de error en `#sweep-status`. | Poner un valor fuera de rango en el formulario y comprobar qué mensaje aparece en `#sweep-status`. |
+| **Cambiar los límites del sweep** (puntos de p, simulaciones, iteraciones, rondas) | [05 §3](05-barrido-sweep.md) y [00 §7](00-empezar-aqui.md) | **Dos sitios sin nada que los sincronice**: los atributos de los `<input>` en `index.html:161-170` y las cuatro llamadas a `_validated_int` (definido en `python/simulation/sweep.py:245`) dentro de `_prepare_sweep`, en `sweep.py:275-280`. **DEUDA CONOCIDA** — además `positive_int` (`app.py:1389`) solo aplica el mínimo, no el máximo: el techo real lo impone el Worker y el exceso llega como texto de error en `#sweep-status`. | Poner un valor fuera de rango en el formulario y comprobar qué mensaje aparece en `#sweep-status`. |
 | **Publicar el sitio** | [08](08-despliegue.md) | Nada de código: `git push` a `main` dispara `.github/workflows/pages.yml`. Recuerda que `publicar` **no** depende de `verificar`, así que el arnés en rojo **no** te detiene. | `curl -sI https://simulador.ruee.dev/.nojekyll` → debe dar **200**; si da 404, el sitio está muerto. Después abrir el sitio y comprobar que el overlay desaparece solo. |
 | **Cambiar el dominio** | [08 §5](08-despliegue.md) | **Nada en el repositorio**: no existe archivo `CNAME` y no debe crearse uno. El dominio se configura en **Settings → Pages → Custom domain** y en el DNS de Cloudflare, donde el `CNAME` a `rou-uu.github.io` va con la **nube gris** (*DNS only*). **INVARIANTE**: con la nube naranja el desafío ACME no llega a GitHub, el certificado nunca se emite y, al ser un TLD `.dev` precargado en HSTS, el sitio queda inaccesible sin opción de continuar. | `dig +short simulador.ruee.dev` → debe devolver `rou-uu.github.io.` seguido de IPs `185.199.10x.153`. Si ves `104.21.x.x` o `172.67.x.x`, alguien proxeó el registro. |
 | **Agregar un campo al modelo de datos** | [02 §6](02-modelo-de-datos.md) | `python/models.py` (`from_json` / `to_json` de `Node` `:18`-`:28` y de `Edge` `:45`-`:54`). **DECISIÓN DELIBERADA**: `Edge.highlight` está deliberadamente **fuera** de `to_json` — es estado de presentación, no del grafo, y meterlo cambiaría el contrato JSON que comparte con el proyecto de referencia. | `PYTHONDONTWRITEBYTECODE=1 python3 scripts/equivalencia.py`, y en el navegador: exportar un JSON, limpiar el grafo, reimportarlo y comprobar que el grafo vuelve igual. |

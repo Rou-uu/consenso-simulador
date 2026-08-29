@@ -10,7 +10,8 @@ navegador, la parte de la interfaz que se genera desde el registro:
 * editar un campo actualiza el estado y llega a ``algorithm_params()``,
 * cambiar de algoritmo conserva lo que se había escrito en el anterior,
 * un algoritmo recién registrado aparece solo, sin tocar la interfaz,
-* la ronda del editor va y vuelve por el worker sin dejar el botón trabado.
+* la ronda del editor va y vuelve por el worker sin dejar el botón trabado,
+* la ranura de código propio compila, fuerza su clave y reporta sus errores.
 
 No sustituye al recorrido visual en navegador: no valida estilos, ni eventos
 reales, ni el arranque de Pyodide.
@@ -185,7 +186,7 @@ DOCUMENTO = instalar_dobles()
 
 import app  # noqa: E402  (requiere los dobles ya instalados)
 from models import Edge, Node  # noqa: E402
-from simulation import registry  # noqa: E402
+from simulation import registry, usuario  # noqa: E402
 
 
 # ==========================================================================
@@ -399,6 +400,110 @@ comprobar(
     "un error del worker también desbloquea el botón",
 )
 comprobar(app.STATE.round_before is None, "el embudo suelta el snapshot que esperaba")
+
+print("\n8. La ranura de código propio")
+# En producción hay DOS registros: el del hilo principal, que es el catálogo del
+# que la interfaz saca sus controles, y el del Worker, donde `usuario.instalar`
+# compila de verdad. Aquí comparten proceso, así que el bloque del instalador se
+# hace sobre una copia y se restaura: si no, vaciar la ranura al probar un
+# fallo dejaría a la interfaz sin la entrada que su selector espera —un choque
+# que la aplicación real no puede tener.
+CATALOGO_DE_LA_INTERFAZ = dict(registry.REGISTRY)
+
+CODIGO = """
+def regla(matrix, values, messages, params=None, *, rng=None):
+    return [(native_scalar(v), None) for v in values]
+
+register(AlgorithmSpec(key="fv", label="Intento de pirata", scalar=regla))
+"""
+spec = usuario.instalar(CODIGO)
+comprobar(spec.key == registry.CLAVE_USUARIO, "la clave se fuerza: pedía `fv` y quedó en la ranura")
+comprobar(registry.get("fv").label == "Flip Value (FV)", "`fv` sigue siendo el de casa")
+comprobar(spec.label == "Intento de pirata", "la etiqueta sí es la suya: sale en los mensajes de error")
+comprobar(
+    spec.updated is usuario.actualizado_por_defecto,
+    "sin declarar `updated`, se usa «el valor del target cambió»",
+)
+comprobar(spec.batch is None, "sin `batch`, el barrido lo rechazará explicándolo")
+
+for descripcion, fuente, esperado in [
+    ("no compila", "def roto(:", SyntaxError),
+    ("no registra nada", "x = 1", ValueError),
+    ("revienta al ejecutarse", "1 / 0", ZeroDivisionError),
+    ("declara parámetros", 'register(AlgorithmSpec(scalar=lambda *a, **k: [], params=(ParamSpec(name="p", label="P", default=1),)))', ValueError),
+]:
+    try:
+        usuario.instalar(fuente)
+        comprobar(False, f"{descripcion}: debía fallar y no falló")
+    except esperado:
+        comprobar(True, f"{descripcion}: eleva {esperado.__name__}")
+    except Exception as error:  # noqa: BLE001 - el tipo es parte de lo que se comprueba
+        comprobar(False, f"{descripcion}: esperaba {esperado.__name__}, llegó {type(error).__name__}")
+
+comprobar(
+    registry.CLAVE_USUARIO not in registry.KEYS,
+    "tras una instalación fallida la ranura queda VACÍA, no con el código anterior",
+)
+
+registry.REGISTRY.clear()
+registry.REGISTRY.update(CATALOGO_DE_LA_INTERFAZ)
+
+# --- la mitad de interfaz ---
+app.STATE.algorithm = registry.CLAVE_USUARIO
+app.STATE.user_source = ""
+DOCUMENTO.getElementById("user-code").value = "# plantilla de index.html"
+app.render_user_code()
+comprobar(not DOCUMENTO.getElementById("user-algorithm").hidden, "al elegir la ranura aparece la caja")
+comprobar(
+    app.STATE.user_source == "# plantilla de index.html",
+    "la plantilla inicial se toma del textarea, no se codifica en app.py",
+)
+
+app.on_user_code_change(types.SimpleNamespace(target=types.SimpleNamespace(value="# lo que escribí")))
+comprobar(app.user_source() == "# lo que escribí", "user_source() devuelve lo tecleado")
+app.STATE.algorithm = "fv"
+comprobar(app.user_source() is None, "con un algoritmo de casa no viaja ningún fuente")
+app.render_user_code()
+comprobar(DOCUMENTO.getElementById("user-algorithm").hidden, "y la caja se esconde")
+
+app.STATE.algorithm = registry.CLAVE_USUARIO
+app.simulate()
+comprobar(
+    worker.enviados[-1]["params"].get("fuente") == "# lo que escribí",
+    "el mensaje lleva el fuente cuando la ranura está activa",
+)
+
+TRAZA = (
+    'Traceback (most recent call last):\n'
+    '  File "/lib/python314.zip/_pyodide/_base.py", line 597, in eval_code_async\n'
+    '  File "/python/simulation/usuario.py", line 146, in instalar\n'
+    '    codigo = compile(fuente, "<algoritmo>", "exec")\n'
+    '  File "<algoritmo>", line 2, in regla\n'
+    'IndexError: fuera de rango'
+)
+recortada = app.trim_traceback(TRAZA, "fuera de rango")
+comprobar(
+    "_pyodide" not in recortada and "usuario.py" not in recortada,
+    "el traceback se recorta: fuera los marcos de Pyodide y del instalador",
+)
+comprobar(
+    '<algoritmo>' in recortada and "IndexError" in recortada,
+    "y se queda lo que sirve: la línea del código pegado y el error",
+)
+comprobar(
+    app.trim_traceback("Traceback:\n  File \"/python/app.py\", line 1\nValueError: x", "resumen") == "resumen",
+    "sin marcos propios cae al mensaje corto: el traceback sería de tripas ajenas",
+)
+
+caja = DOCUMENTO.getElementById("user-code-error")
+caja.hidden = True
+app.report_engine_error({"type": "error", "etapa": "compilar", "message": "expected ':'", "traza": TRAZA})
+comprobar(not caja.hidden, "un error con traza se muestra en la caja de código")
+comprobar("no compila" in caja.textContent, "y dice en qué etapa falló")
+caja.hidden = True
+app.report_engine_error({"type": "error", "message": "algo del motor", "traza": None})
+comprobar(caja.hidden, "un error sin traza no ensucia la caja: ese va por notify")
+
 
 print()
 if FALLAS:

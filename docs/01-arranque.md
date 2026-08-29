@@ -66,8 +66,8 @@ HTTP del navegador suaviza el costo, no lo elimina.
 
 > **Archivos que cubre:** `index.html` (194 líneas) y los selectores del overlay en `css/app.css` (`.python-loader`, `.loader-mark`, `[hidden]`).
 > **Que puedes cambiar aqui:** textos, clases, orden visual, contenedores nuevos, atributos ARIA.
-> **Que es intocable y por que:** todo `id` que Python busca con `by_id()` (`python/app.py:36`), y que `#python-loader` se **superponga** en vez de ocultar `#app`.
-> **Como verificas el cambio:** a ojo en <http://localhost:8000>. `python3 scripts/smoke_ui.py` **no sirve** para esto: su DOM falso crea cualquier `id` que se le pida (`scripts/smoke_ui.py:92-93`), así que un `id` renombrado pasa el smoke y falla en el navegador.
+> **Que es intocable y por que:** todo `id` que Python busca con `by_id()` (`python/app.py:66`), y que `#python-loader` se **superponga** en vez de ocultar `#app`.
+> **Como verificas el cambio:** a ojo en <http://localhost:8000>. `python3 scripts/smoke_ui.py` **no sirve** para esto: su DOM falso crea cualquier `id` que se le pida (`scripts/smoke_ui.py:93-94`), así que un `id` renombrado pasa el smoke y falla en el navegador.
 
 194 líneas de marcado **sin una sola línea de lógica**. Su papel es doble:
 
@@ -80,12 +80,12 @@ HTTP del navegador suaviza el costo, no lo elimina.
 |---|---|
 | `index.html:8` | `<link rel="stylesheet" href="./css/app.css">` en el `<head>`. Bloqueante: el overlay ya se pinta con estilos, nunca hay destello sin CSS. |
 | `index.html:11-15` | `#python-loader`: el overlay a pantalla completa. Es lo **primero** del `<body>`, así que existe antes que nada. |
-| `index.html:17-190` | `<main id="app">`: la aplicación entera, ya presente en el DOM pero tapada por el overlay. |
-| `index.html:192` | `<script type="module" src="./js/bootstrap.js">`, al final del `<body>`. |
+| `index.html:17-224` | `<main id="app">`: la aplicación entera, ya presente en el DOM pero tapada por el overlay. |
+| `index.html:226` | `<script type="module" src="./js/bootstrap.js">`, al final del `<body>`. |
 
 Detalle no obvio: `type="module"` implica **`defer` automático**. El script se
 ejecuta cuando el HTML ya está parseado, así que `document.getElementById` en
-`js/bootstrap.js:16-17` —que corre a nivel de módulo, no dentro de una
+`js/bootstrap.js:17-18` —que corre a nivel de módulo, no dentro de una
 función— siempre encuentra los elementos.
 
 Dos contrafactuales que conviene tener claros, porque fallan de maneras muy
@@ -97,7 +97,7 @@ distintas:
   en el `<head>` puede ejecutarse antes de que exista el `<body>`; las líneas
   16-17 devolverían `null` y el overlay dejaría de actualizarse **sin lanzar
   ningún error**, porque todas las escrituras están guardadas con `if (loader)` /
-  `if (detail)` (`js/bootstrap.js:20` y `:26`).
+  `if (detail)` (`js/bootstrap.js:21` y `:26`).
 - **Convertirlo en un `<script>` clásico rompe ruidosamente.** `js/bootstrap.js:1`
   es `import { loadPyodide } from "…/pyodide.mjs";`: un `import` de nivel superior
   en un script clásico es un **`SyntaxError` de parseo**. El archivo no se ejecuta
@@ -111,7 +111,7 @@ reales, porque nunca estuvo en `display: none`.
 
 ### Los contenedores que Python rellena
 
-El canvas SVG (`index.html:91-105`) tiene cuatro capas `<g>` que **nunca se
+El canvas SVG (`index.html:125-139`) tiene cuatro capas `<g>` que **nunca se
 reemplazan**; lo que se reemplaza es su `innerHTML`:
 
 ```
@@ -128,7 +128,7 @@ svg#graph-canvas
 
 Ese reparto es el motivo por el que `bind_events()` puede enganchar **un solo**
 listener por tipo de evento al `<svg>` y no a cada nodo: todo es delegación.
-`render_canvas()` (`python/app.py:233`) puede tirar y regenerar 500 círculos sin
+`render_canvas()` (`python/app.py:299`) puede tirar y regenerar 500 círculos sin
 que se pierda un solo listener, porque los listeners están en el padre estático.
 El mecanismo completo de regeneración y delegación vive en
 [§3 · La capa de interfaz](03-interfaz.md).
@@ -137,27 +137,27 @@ Hay marcado estático que Python **sustituye** en el primer render, y esto
 confunde a quien lee el HTML esperando encontrarlo en el DOM vivo:
 
 - `index.html:27-30` dibuja un `<button id="tab_0">` y un `<button
-  id="new-tab-btn">`. `render_tabs()` (`python/app.py:202-218`) reescribe el
+  id="new-tab-btn">`. `render_tabs()` (`python/app.py:268-284`) reescribe el
   `innerHTML` de `#graph-tabs` entero y emite **`<div class="tab">`**, no
-  `<button>`. El botón `+ Nueva` se regenera también (`python/app.py:217`).
+  `<button>`. El botón `+ Nueva` se regenera también (`python/app.py:283`).
   Es decir: el marcado del HTML es una maqueta que dura milisegundos.
 - `index.html:63` declara `<select id="algorithm-select">` **vacío a
   propósito**. Las opciones las genera `render_algorithm_options()`
-  (`python/app.py:151-160`) desde el registro de algoritmos. Por eso agregar un
+  (`python/app.py:181-190`) desde el registro de algoritmos. Por eso agregar un
   algoritmo no toca ni `index.html` ni JavaScript (lo dice el comentario en
   `index.html:61-62`).
-- `index.html:146-158` trae rejilla y etiquetas del eje ya dibujadas; `app.py`
+- `index.html:180-192` trae rejilla y etiquetas del eje ya dibujadas; `app.py`
   las regenera según la escala de los datos.
 
 Y hay contenedores que nacen ocultos y Python conmuta: `#sweep-panel`
-(`index.html:123`), `#json-panel` (`index.html:167`), `#app-dialog`
-(`index.html:179`), `#simulation-results` (`index.html:67`).
+(`index.html:157`), `#json-panel` (`index.html:201`), `#app-dialog`
+(`index.html:213`), `#simulation-results` (`index.html:101`).
 
 **INVARIANTE** — `index.html` es un contrato de `id`s. `by_id()`
-(`python/app.py:36`) es `document.getElementById` pelado: si renombras un `id`
+(`python/app.py:66`) es `document.getElementById` pelado: si renombras un `id`
 aquí, allá obtienes `None` y el fallo aparece como `AttributeError` en la
 consola de Pyodide, a veces solo cuando el usuario toca ese control.
-`set_hidden` y `set_text` (`python/app.py:50-59`) toleran el `None` en
+`set_hidden` y `set_text` (`python/app.py:80-89`) toleran el `None` en
 silencio; el resto del archivo, no. Y ningún script del repositorio comprueba
 este contrato: el único verificador es abrir el navegador.
 
@@ -170,7 +170,7 @@ este contrato: el único verificador es abrir el navegador.
 > **Que es intocable y por que:** `import.meta.url` en `fetchPythonFile` (sin él el sitio muere bajo un subdirectorio), el `sys.path.insert` y el `run_name="__main__"` del puente a Python, y el paralelismo de la línea 55.
 > **Como verificas el cambio:** `python3 scripts/serve.py` y recarga con la consola abierta; el arranque correcto termina con el overlay oculto y `window.graphSimulatorReady === true`.
 
-### `PYTHON_FILES` (`js/bootstrap.js:4-14`) y `PYODIDE_INDEX_URL` (`:3`)
+### `PYTHON_FILES` (`js/bootstrap.js:4-15`) y `PYODIDE_INDEX_URL` (`:3`)
 
 ```js
 const PYODIDE_INDEX_URL = "https://cdn.jsdelivr.net/pyodide/v314.0.2/full/";
@@ -285,7 +285,7 @@ nueve `{destination, source}`.
 pendiente, la promesa de la línea 55 se rechaza sin handler todavía adjunto, y
 el navegador puede registrar un `unhandledrejection` antes de que el `await` de
 la línea 59 la recoja. El estado final que ve el usuario es correcto —overlay en
-error con el mensaje de `js/bootstrap.js:35`—, solo la consola se ensucia.
+error con el mensaje de `js/bootstrap.js:36`—, solo la consola se ensucia.
 
 ### El puente a Python (`:67-75`)
 
@@ -308,7 +308,7 @@ Cuatro cosas que parecen ceremonia y no lo son:
    el `from geometry import …` de `python/app.py:16` explota con
    `ModuleNotFoundError`.
 2. **INVARIANTE · `run_name="__main__"`.** Es lo que hace disparar el guardia
-   `if __name__ == "__main__": main()` de `python/app.py:1353-1354`. Con un
+   `if __name__ == "__main__": main()` de `python/app.py:1536-1537`. Con un
    `import app` normal, el módulo se cargaría y `main()` no se llamaría nunca:
    la app quedaría inerte, con el overlay ya oculto y cero listeners — el modo
    de fallo más desconcertante posible, porque la pantalla se ve perfecta.
@@ -335,7 +335,7 @@ startApplication().catch((error) => {
 });
 ```
 
-**DEUDA CONOCIDA (de legibilidad)** — en `js/bootstrap.js:86` se declara un
+**DEUDA CONOCIDA (de legibilidad)** — en `js/bootstrap.js:87` se declara un
 `const detail` **local** que sombrea el `detail` de módulo (`:17`). No hay bug:
 `showRuntimeState` cierra sobre el binding de módulo, no sobre el del `catch`.
 Pero leído rápido parece que se está pisando la referencia al elemento del DOM.
@@ -349,7 +349,7 @@ Pero leído rápido parece que se está pisando la referencia al elemento del DO
 > **Que es intocable y por que:** que **toda** función que cruce a JavaScript pase por `retain()`; sin eso el proxy se recolecta y el evento muere sin error visible.
 > **Como verificas el cambio:** `python3 scripts/smoke_ui.py` cubre el selector y los parámetros; los listeners solo se comprueban a mano en <http://localhost:8000> (crear un nodo, arrastrarlo, Shift para conectar, Simular).
 
-`python/app.py:1345-1350`, cuatro líneas:
+`python/app.py:1528-1533`, cuatro líneas:
 
 ```python
 def main() -> None:
@@ -370,11 +370,11 @@ singleton `STATE = AppState()`, cuyo valor por omisión ya trae una pestaña
 import muerto. Es lo que **registra** `fv` y `amp`. Si ese import desapareciera,
 el registro quedaría vacío y el `<select>` saldría sin opciones.
 
-### `bind_events()` (`python/app.py:1301-1342`)
+### `bind_events()` (`python/app.py:1483-1525`)
 
 **40 llamadas a `listen()`**, una por línea. `listen()`
-(`python/app.py:46-47`) es `target.addEventListener(event, retain(callback))`, y
-`retain()` (`python/app.py:40-43`) es el corazón del asunto:
+(`python/app.py:76-77`) es `target.addEventListener(event, retain(callback))`, y
+`retain()` (`python/app.py:70-73`) es el corazón del asunto:
 
 ```python
 def retain(callback: Callable):
@@ -390,11 +390,11 @@ visible**. Hay 6 apariciones de `retain(` en `app.py`:
 
 | Dónde | Línea | Cuántos proxies |
 |---|---|---|
-| Definición de `retain` | `python/app.py:40` | — |
-| Dentro de `listen()` | `python/app.py:47` | 40, uno por llamada de `bind_events()` |
-| `setTimeout` de limpieza del blob en `export_json` | `python/app.py:966` | 1 por exportación |
-| Callback de `file.text().then(…)` en `on_file_change` | `python/app.py:1012` | 1 por importación |
-| Los dos listeners del Worker en `start_sweep` | `python/app.py:1286-1287` | 2 por sweep |
+| Definición de `retain` | `python/app.py:70` | — |
+| Dentro de `listen()` | `python/app.py:77` | 40, uno por llamada de `bind_events()` |
+| `setTimeout` de limpieza del blob en `export_json` | `python/app.py:1033` | 1 por exportación |
+| Callback de `file.text().then(…)` en `on_file_change` | `python/app.py:1079` | 1 por importación |
+| Los dos listeners del Worker en `start_sweep` | `python/app.py:1468-1469` | 2 por sweep |
 
 Es decir: 44 proxies como mínimo (40 + 2 del Worker + 2 puntuales), y **crecen
 sin tope**, porque los cuatro call sites que no son `bind_events()` añaden uno
@@ -411,11 +411,11 @@ agarrados sus callbacks. `retain()` no es solo para que el evento responda: es
 lo que mantiene viva a la aplicación entera.
 
 Los objetivos de los listeners son todos **contenedores estables**: `#graph-tabs`
-(delegación resuelta con `closest()` en `python/app.py:579-593`), el `<svg>` del
+(delegación resuelta con `closest()` en `python/app.py:646-660`), el `<svg>` del
 canvas, `window`, y los controles fijos de la barra lateral. Ninguno se destruye
 jamás.
 
-### `render_all()` (`python/app.py:532`)
+### `render_all()` (`python/app.py:599`)
 
 ```python
 render_tabs(); render_controls(); render_canvas(); render_json()
@@ -430,7 +430,7 @@ Este es el momento en que el HTML estático deja de existir:
 | `render_canvas` (`:231`) | Pone el `transform` de pan/zoom en las cuatro capas y escribe `innerHTML` de aristas, etiquetas y nodos (vacíos en el arranque). Termina llamando a `render_minimap()`. |
 | `render_json` (`:486`) | Escribe `#json-content` con `{"directed": true, "nodes": [], "edges": []}`. |
 
-### `fit_view()` (`python/app.py:859-862`)
+### `fit_view()` (`python/app.py:926-929`)
 
 ```python
 bounds = by_id("graph-canvas").getBoundingClientRect()
@@ -445,7 +445,7 @@ height <= 0`. Esa misma guardia es lo que salva el arranque si algún día algui
 decide ocultar `#app` durante la carga: el canvas mediría 0×0 y sin ella habría
 una división entre cero.
 
-### `window.graphSimulatorReady = True` (`python/app.py:1350`)
+### `window.graphSimulatorReady = True` (`python/app.py:1533`)
 
 Bandera para comprobaciones externas (consola, pruebas de navegador). **Nadie la
 lee dentro del repositorio**: `bootstrap.js` no la consulta, y ocultar el overlay
@@ -508,21 +508,21 @@ sequenceDiagram
 
 ## 5. El segundo runtime: `js/sweep-worker.js`
 
-> **Archivos que cubre:** `js/sweep-worker.js` (102 líneas) y el nacimiento del Worker en `python/app.py:1256-1259`.
+> **Archivos que cubre:** `js/sweep-worker.js` (102 líneas) y el nacimiento del Worker en `python/app.py:1434-1437`.
 > **Que puedes cambiar aqui:** `SWEEP_FILES`, pero solo para agregar un `.py` que el motor del barrido **necesite de verdad**.
-> **Que es intocable y por que:** que `SWEEP_FILES` tenga 6 archivos y no 9. La lista es un candado arquitectónico ejecutable, no una optimización de tamaño.
+> **Que es intocable y por que:** que `SWEEP_FILES` tenga 7 archivos y no 10. La lista es un candado arquitectónico ejecutable, no una optimización de tamaño.
 > **Como verificas el cambio:** en <http://localhost:8000>, pestaña *Análisis de Convergencia*, con 2 puntos de p y 10 simulaciones; el gráfico debe pintarse y `#sweep-status` no debe mostrar una línea roja.
 
 ### Cuándo nace
 
 No lo carga `index.html`. Lo crea **Python**, cuando el usuario pulsa
-*Ejecutar sweep*, en `start_sweep()` (`python/app.py:1237`):
+*Ejecutar sweep*, en `start_sweep()` (`python/app.py:1414`):
 
 ```python
 WORKER = Worker.new(
     "./js/sweep-worker.js",
     to_js({"type": "module"}, dict_converter=Object.fromEntries),
-)   # python/app.py:1256-1259
+)   # python/app.py:1434-1437
 ```
 
 Dos notas: la URL `./js/sweep-worker.js` se resuelve contra la **URL del
@@ -533,24 +533,24 @@ su línea 1, lo cual exige un navegador con soporte de *module workers*.
 ### Qué hace al nacer
 
 ```js
-const runtimePromise = createRuntime();   // js/sweep-worker.js:53 — nivel de modulo
+const runtimePromise = createRuntime();   // js/sweep-worker.js:54 — nivel de modulo
 ```
 
-**DECISION DELIBERADA** — `createRuntime()` (`js/sweep-worker.js:34-51`) se
+**DECISION DELIBERADA** — `createRuntime()` (`js/sweep-worker.js:35-52`) se
 dispara **en cuanto el worker se instancia**, sin esperar al mensaje `run`. Así
 la descarga de Pyodide se solapa con el tiempo que el usuario tarda en nada. Hace
 lo mismo que `bootstrap.js` menos dos cosas: no toca el DOM (no lo tiene) y **no
-ejecuta `runpy`** — solo deja el `sys.path` listo (`js/sweep-worker.js:43-48`).
+ejecuta `runpy`** — solo deja el `sys.path` listo (`js/sweep-worker.js:44-49`).
 
-Del contrato de mensajes entre el Worker y `on_message` (`python/app.py:1261`),
+Del contrato de mensajes entre el Worker y `on_message` (`python/app.py:1439`),
 qué hace `iter_sweep` con los parámetros, el estado real del botón *Detener* y
 el costo de `WORKER.terminate()`, se ocupa
 [§5 · El barrido](05-barrido-sweep.md). Aquí basta con dos hechos de arranque:
 
 - Los parámetros cruzan como **cadena JSON**
-  (`js/sweep-worker.js:97`, `JSON.stringify`), no como objeto JS: evita proxies y
+  (`js/sweep-worker.js:119`, `JSON.stringify`), no como objeto JS: evita proxies y
   problemas de vida útil de objetos entre los dos mundos.
-- `mensajeLegible()` (`js/sweep-worker.js:58-70`) se queda con la última línea del
+- `mensajeLegible()` (`js/sweep-worker.js:59-71`) se queda con la última línea del
   traceback de Python y le quita el prefijo de clase, para que `#sweep-status`
   muestre `No module named 'models'` en vez de veinte líneas de traza. Ese
   mensaje corto es, casi siempre, el síntoma de un archivo que falta en
@@ -559,7 +559,7 @@ el costo de `WORKER.terminate()`, se ocupa
 ### Por qué monta MENOS archivos
 
 ```js
-const SWEEP_FILES = [                 // js/sweep-worker.js:4-11
+const SWEEP_FILES = [                 // js/sweep-worker.js:4-12
   "python/simulation/__init__.py", "python/simulation/registry.py",
   "python/simulation/rng.py",       "python/simulation/algorithms.py",
   "python/simulation/engine.py",    "python/simulation/sweep.py",
@@ -597,7 +597,7 @@ y `rng.py` no importan nada interno, `algorithms.py` usa `registry` y `rng`,
 flowchart TB
     subgraph R1["Runtime 1 · hilo principal · lo crea index.html"]
         direction TB
-        HTML["index.html linea 192<br/>script type=module"] --> BS["js/bootstrap.js<br/>PYTHON_FILES = 9 archivos"]
+        HTML["index.html linea 192<br/>script type=module"] --> BS["js/bootstrap.js<br/>PYTHON_FILES = 10 archivos"]
         BS --> ED["/python/app.py<br/>/python/models.py<br/>/python/geometry.py"]
         BS --> SIM1["/python/simulation/<br/>__init__ registry rng<br/>algorithms engine sweep"]
         ED --> RUN["runpy.run_path app.py<br/>run_name = __main__"]
@@ -608,7 +608,7 @@ flowchart TB
 
     subgraph R2["Runtime 2 · Web Worker · lo crea start_sweep en Python"]
         direction TB
-        WK["js/sweep-worker.js<br/>SWEEP_FILES = 6 archivos"] --> SIM2["/python/simulation/<br/>__init__ registry rng<br/>algorithms engine sweep"]
+        WK["js/sweep-worker.js<br/>SWEEP_FILES = 7 archivos"] --> SIM2["/python/simulation/<br/>__init__ registry rng<br/>algorithms engine sweep"]
         SIM2 --> NOAPP["sin app.py<br/>sin models.py<br/>sin geometry.py"]
         NOAPP --> ITER["from simulation.sweep import iter_sweep<br/>bucle que llama a postMessage"]
     end
@@ -634,7 +634,7 @@ pero la inicialización y la RAM se pagan íntegras cada vez que nace un Worker.
 
 ## 6. Estados del overlay y qué se ve cuando algo falla
 
-> **Archivos que cubre:** `js/bootstrap.js:19-29` y `:84-88`, `index.html:11-15`, y los selectores `.python-loader`, `.python-loader.is-ready`, `.loader-mark`, `[hidden]` de `css/app.css`.
+> **Archivos que cubre:** `js/bootstrap.js:20-30` y `:84-88`, `index.html:11-15`, y los selectores `.python-loader`, `.python-loader.is-ready`, `.loader-mark`, `[hidden]` de `css/app.css`.
 > **Que puedes cambiar aqui:** los textos, y añadir una regla CSS para `[data-state="error"]` (hoy no existe y hace falta).
 > **Que es intocable y por que:** que `showRuntimeState` sea el **único** punto de escritura del overlay; dos escritores compitiendo dejarían mensajes contradictorios en pantalla.
 > **Como verificas el cambio:** renombra temporalmente un `.py` (p. ej. `mv python/geometry.py python/geometry.py.bak`), recarga, comprueba el mensaje del overlay, y devuélvelo a su sitio.
@@ -665,19 +665,19 @@ Estado a estado, lo que se ve:
 ### Qué pasa si algo falla
 
 Todo el arranque cuelga de una sola promesa, y todos los fallos convergen en el
-mismo `catch` (`js/bootstrap.js:84-88`). El mensaje que se ve depende de dónde
+mismo `catch` (`js/bootstrap.js:85-89`). El mensaje que se ve depende de dónde
 se rompió:
 
 | Fallo | Mensaje en `#loader-detail` |
 |---|---|
 | Sin red / CDN caído | El error de `loadPyodide`, típicamente un `TypeError: Failed to fetch`. |
-| Un `.py` que da 404 (renombrado, no publicado) | `No se pudo descargar python/xxx.py (404).` — texto propio de `js/bootstrap.js:35`. |
+| Un `.py` que da 404 (renombrado, no publicado) | `No se pudo descargar python/xxx.py (404).` — texto propio de `js/bootstrap.js:36`. |
 | Un `.py` que falta en `PYTHON_FILES` | El traceback de Pyodide con `ModuleNotFoundError: No module named 'xxx'`. |
 | Un `SyntaxError` o cualquier excepción en el import o en `main()` | El traceback completo de Python, concatenado tras `No se pudo iniciar la aplicación: `. |
 | `id` inexistente en `index.html` | `AttributeError: 'NoneType' object has no attribute …` desde `bind_events()`. |
 
 Y el detalle importante para depurar: **`console.error` recibe el objeto `Error`
-completo** (`js/bootstrap.js:85`), con el traceback de Python íntegro. El overlay
+completo** (`js/bootstrap.js:86`), con el traceback de Python íntegro. El overlay
 muestra solo `error.message`. Si el mensaje en pantalla se ve truncado o confuso,
 la consola tiene la versión buena.
 
@@ -708,7 +708,7 @@ sin el fundido que el CSS insinúa. Si quieres el fundido, hay que añadir
 
 ## 7. Por qué los `.py` se enumeran a mano
 
-> **Archivos que cubre:** `js/bootstrap.js:4-14`, `js/sweep-worker.js:4-11`, `.nojekyll`, `scripts/serve.py`.
+> **Archivos que cubre:** `js/bootstrap.js:4-15`, `js/sweep-worker.js:4-12`, `.nojekyll`, `scripts/serve.py`.
 > **Que puedes cambiar aqui:** el contenido de las dos listas, cuando agregues, renombres o borres un `.py`.
 > **Que es intocable y por que:** que las dos listas existan y estén completas, y que `.nojekyll` (0 bytes, en la raíz) siga ahí.
 > **Como verificas el cambio:** `python3 scripts/serve.py`, recarga y confirma `window.graphSimulatorReady === true`; después ejecuta un sweep corto para ejercitar la segunda lista.
@@ -756,11 +756,11 @@ Casos adicionales que conviene tener presentes:
 
 - **Renombras o mueves un `.py` sin tocar la lista** → no es un
   `ModuleNotFoundError`, es un **404**, y falla *antes* de que Python corra:
-  `No se pudo descargar python/viejo.py (404).` (`js/bootstrap.js:35`).
+  `No se pudo descargar python/viejo.py (404).` (`js/bootstrap.js:36`).
 - **Borras un `.py` que sigue en la lista** → mismo 404, aunque nadie lo importe.
   La lista es una promesa de existencia, no solo de importabilidad.
 - **Sirves el sitio con un servidor de tipo SPA** que responde `200` con
-  `index.html` a rutas inexistentes → el `response.ok` de `js/bootstrap.js:34`
+  `index.html` a rutas inexistentes → el `response.ok` de `js/bootstrap.js:35`
   pasa, se monta HTML como si fuera Python y el error se convierte en un
   `SyntaxError` incomprensible. `scripts/serve.py` usa
   `SimpleHTTPRequestHandler`, que devuelve un 404 honesto; conviene mantenerlo
@@ -793,9 +793,9 @@ despliegue, no solo en local.
 - **El JavaScript es infraestructura, no aplicación.** Si te encuentras
   escribiendo lógica en `js/`, casi seguro va en `python/`.
 - **Agregar un `.py` sí toca el arranque. INVARIANTE, dos listas:**
-  `PYTHON_FILES` (`js/bootstrap.js:4-14`) **siempre**; `SWEEP_FILES`
-  (`js/sweep-worker.js:4-11`) solo si el motor del sweep lo necesita de verdad.
-- **INVARIANTE · `retain()`** (`python/app.py:40`): toda función que cruce a
+  `PYTHON_FILES` (`js/bootstrap.js:4-15`) **siempre**; `SWEEP_FILES`
+  (`js/sweep-worker.js:4-12`) solo si el motor del sweep lo necesita de verdad.
+- **INVARIANTE · `retain()`** (`python/app.py:70`): toda función que cruce a
   JavaScript pasa por ahí, o el evento muere en silencio y la app entera se
   vuelve recolectable.
 - **INVARIANTE · el contrato de `id`s** entre `index.html` y `by_id()`. Ningún
@@ -819,6 +819,6 @@ despliegue, no solo en local.
   no hace falta vaciar caché al editar. La misma configuración está en
   la configuración local del entorno.
 - **Cuando se "queda cargando", lee la consola.** El overlay en error se parece
-  demasiado al overlay cargando; `console.error` (`js/bootstrap.js:85`) tiene el
+  demasiado al overlay cargando; `console.error` (`js/bootstrap.js:86`) tiene el
   traceback completo, y `window.graphSimulatorReady` te dice en un segundo si
   Python llegó a arrancar.

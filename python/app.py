@@ -24,6 +24,13 @@ PROXIES: list[Any] = []
 # y ENGINE tiene que sobrevivir a eso para seguir atendiendo al editor.
 WORKER = None
 ENGINE = None
+# Un unico proxy retenido para el plazo de la ronda: crear uno por ronda haria
+# crecer PROXIES sin fin, porque `retain` no libera nunca.
+ROUND_TIMER = None
+ROUND_TIMEOUT_PROXY = None
+#: Cuanto se le da a una ronda ya con el motor caliente. Una ronda real tarda
+#: milisegundos; este plazo existe por el codigo pegado que no termina.
+ROUND_TIMEOUT_MS = 15000
 DRAG: dict[str, Any] = {}
 CONNECTION: dict[str, Any] = {}
 PAN: dict[str, Any] = {}
@@ -31,6 +38,29 @@ LAST_NODE_CLICK: dict[str, Any] = {}
 DIALOG_CALLBACK: Callable[[str], bool] | None = None
 CHART_POINTS: list[dict[str, float]] = []
 CHART_MAX_Y = 1.0
+
+
+def _solo_en_el_worker(*_args, **_kwargs):
+    """Placeholder de la ranura de usuario: en el hilo principal no corre nada."""
+
+    raise RuntimeError(
+        "El algoritmo propio se compila y corre dentro del Worker, no aquí."
+    )
+
+
+# La ranura aparece en el selector como un algoritmo más porque **es** una
+# entrada del registro. En el hilo principal el registro ya no ejecuta nada: es
+# el catálogo desde el que la interfaz arma sus controles. El código de verdad
+# vive en el Worker, que lo instala con `simulation.usuario` (docs/09 §A.12).
+registry.register(
+    registry.AlgorithmSpec(
+        key=registry.CLAVE_USUARIO,
+        label="Algoritmo propio…",
+        scalar=_solo_en_el_worker,
+        updated=_solo_en_el_worker,
+        batch=_solo_en_el_worker,
+    )
+)
 
 
 def by_id(element_id: str):
@@ -158,6 +188,42 @@ def render_algorithm_options() -> None:
     if select.innerHTML != opciones:
         select.innerHTML = opciones
     select.value = STATE.algorithm
+
+
+def render_user_code() -> None:
+    """Muestra la caja de código sólo cuando la ranura de usuario está activa.
+
+    Nunca **escribe** en el ``textarea``: `render_controls` corre en cada render
+    y sobrescribirlo le quitaría a quien escribe lo que lleva tecleado. La
+    plantilla inicial es el contenido del elemento en ``index.html``.
+    """
+
+    propio = STATE.algorithm == registry.CLAVE_USUARIO
+    set_hidden("user-algorithm", not propio)
+    if propio and not STATE.user_source:
+        STATE.user_source = str(by_id("user-code").value)
+
+
+def on_user_code_change(event) -> None:
+    STATE.user_source = str(event.target.value)
+
+
+def show_user_code_error(mensaje: str) -> None:
+    caja = by_id("user-code-error")
+    caja.textContent = mensaje
+    caja.hidden = False
+
+
+def clear_user_code_error() -> None:
+    by_id("user-code-error").hidden = True
+
+
+def user_source() -> str | None:
+    """El fuente que debe viajar en el mensaje, o ``None`` si no aplica."""
+
+    if STATE.algorithm != registry.CLAVE_USUARIO:
+        return None
+    return STATE.user_source or str(by_id("user-code").value)
 
 
 def render_algorithm_params() -> None:
@@ -501,6 +567,7 @@ def render_controls() -> None:
     )
     render_algorithm_options()
     render_algorithm_params()
+    render_user_code()
     by_id("simulate-btn").disabled = not bool(tab.nodes) or STATE.round_running
     if not STATE.round_running:
         etiqueta = "Simular"
@@ -1074,22 +1141,28 @@ def simulate(*_args) -> None:
     STATE.round_before = before
     STATE.round_tab_id = STATE.tab.id
     STATE.round_running = True
+    clear_user_code_error()
     render_controls()
+    parametros: dict[str, Any] = {
+        "graph": before.graph_data(),
+        "algorithm": STATE.algorithm,
+        "algorithmParams": algorithm_params(),
+    }
+    fuente = user_source()
+    if fuente is not None:
+        parametros["fuente"] = fuente
     # Si el worker todavia esta cargando Pyodide, el mensaje espera ahi dentro:
-    # su manejador hace `await runtimePromise` antes de atender nada.
+    # su manejador hace `await runtimePromise` antes de atender nada. El plazo
+    # se arma solo cuando el motor ya esta listo: contarlo durante la carga
+    # mataria un worker que no tiene la culpa.
     ENGINE.postMessage(
         to_js(
-            {
-                "type": "ronda",
-                "params": {
-                    "graph": before.graph_data(),
-                    "algorithm": STATE.algorithm,
-                    "algorithmParams": algorithm_params(),
-                },
-            },
+            {"type": "ronda", "params": parametros},
             dict_converter=Object.fromEntries,
         )
     )
+    if STATE.engine_ready:
+        arm_round_timeout()
 
 
 def apply_round(result: dict[str, Any]) -> None:
@@ -1139,10 +1212,110 @@ def finish_round() -> None:
     worker no repinta nada y aun asi tiene que devolver el control.
     """
 
+    cancel_round_timeout()
     STATE.round_running = False
     STATE.round_before = None
     STATE.round_tab_id = None
     render_all()
+
+
+def arm_round_timeout() -> None:
+    """Arma el plazo de la ronda. Sin esto, un algoritmo que no termina cuelga
+    el botón para siempre: no llega ni resultado ni error, y no hay nada que
+    desbloquee."""
+
+    global ROUND_TIMER, ROUND_TIMEOUT_PROXY
+    cancel_round_timeout()
+    if ROUND_TIMEOUT_PROXY is None:
+        ROUND_TIMEOUT_PROXY = retain(lambda *_args: on_round_timeout())
+    ROUND_TIMER = window.setTimeout(ROUND_TIMEOUT_PROXY, ROUND_TIMEOUT_MS)
+
+
+def cancel_round_timeout() -> None:
+    global ROUND_TIMER
+    if ROUND_TIMER is not None:
+        window.clearTimeout(ROUND_TIMER)
+        ROUND_TIMER = None
+
+
+def on_round_timeout() -> None:
+    """Mata el motor y devuelve el control. Es la protección que se gana al
+    sacar la ejecución del hilo principal: ahí un ciclo infinito congela la
+    pestaña y no queda nada por hacer."""
+
+    if not STATE.round_running:
+        return
+    segundos = ROUND_TIMEOUT_MS // 1000
+    mensaje = (
+        f"El algoritmo no terminó en {segundos} s y se detuvo el motor.\n"
+        "Suele ser un ciclo que no cierra."
+    )
+    if STATE.algorithm == registry.CLAVE_USUARIO:
+        show_user_code_error(mensaje)
+    else:
+        notify(mensaje)
+    restart_engine_worker()
+    finish_round()
+
+
+def report_engine_error(message: dict[str, Any]) -> None:
+    """Manda el fallo a donde se pueda hacer algo con él.
+
+    Con código pegado, el traceback **es** la información útil: dice la línea.
+    Con los algoritmos de casa sería ruido de Pyodide, así que ahí sigue yendo
+    el mensaje corto por `notify`.
+    """
+
+    traza = message.get("traza")
+    resumen = str(message.get("message") or "error desconocido")
+    if not traza:
+        notify(f"Error al ejecutar la simulación: {resumen}")
+        return
+    encabezado = (
+        "Tu algoritmo no compila:"
+        if str(message.get("etapa")) == "compilar"
+        else "Tu algoritmo falló al correr:"
+    )
+    show_user_code_error(f"{encabezado}\n\n{trim_traceback(str(traza), resumen)}")
+
+
+def trim_traceback(traza: str, resumen: str) -> str:
+    """Deja el traceback a partir del primer marco del código pegado.
+
+    Lo de arriba son marcos de Pyodide, de `runPythonAsync` y de `usuario.py`:
+    ruido para quien escribió el algoritmo, que solo necesita su número de línea.
+    El fuente se compila con el nombre `<algoritmo>` justamente para poder
+    encontrar aquí dónde empieza lo suyo.
+
+    Si no aparece ningún marco propio, el fallo es nuestro o del contrato (por
+    ejemplo, código que no registra nada): ahí el mensaje corto dice más que un
+    traceback de tripas ajenas.
+    """
+
+    lineas = traza.splitlines()
+    # `File "<algoritmo>"` y no solo `"<algoritmo>"`: la propia línea de
+    # `usuario.py` que llama a `compile` contiene esa cadena, y buscarla suelta
+    # empezaba el recorte un marco antes.
+    marco = 'File "<algoritmo>"'
+    inicio = next((i for i, linea in enumerate(lineas) if marco in linea), None)
+    if inicio is None:
+        return resumen
+    return "\n".join(["Traceback (llamada más reciente al final):", *lineas[inicio:]])
+
+
+def restart_engine_worker() -> None:
+    """Destruye el motor y levanta uno nuevo.
+
+    El código de usuario viaja en cada mensaje, así que el worker nuevo no
+    necesita que se le reinstale nada: el siguiente clic lo lleva consigo.
+    """
+
+    global ENGINE
+    if ENGINE is not None:
+        ENGINE.terminate()
+        ENGINE = None
+    STATE.engine_ready = False
+    start_engine_worker()
 
 
 def start_engine_worker() -> None:
@@ -1166,11 +1339,15 @@ def start_engine_worker() -> None:
         kind = str(message.get("type", ""))
         if kind == "listo":
             STATE.engine_ready = True
+            # Si alguien picó Simular durante la carga, el plazo empieza a
+            # contar ahora: antes habría castigado a la descarga, no al código.
+            if STATE.round_running:
+                arm_round_timeout()
             render_controls()
         elif kind == "ronda":
             apply_round(json.loads(str(message.get("resultado") or "{}")))
         elif kind == "error":
-            notify(f"Error al ejecutar la simulación: {message.get('message')}")
+            report_engine_error(message)
             finish_round()
 
     def on_error(event):
@@ -1244,6 +1421,7 @@ def start_sweep(*_args) -> None:
         # Nombre explícito: este dict ya se llama `params` a nivel del mensaje,
         # y esta clave son los parámetros del algoritmo, no los del sweep.
         "algorithmParams": algorithm_params(),
+        "fuente": user_source(),
         "numPPoints": positive_int("p-points-input", 2),
         "totalSimulationsPerP": positive_int("simulations-input", 1),
         "iterations": positive_int("iterations-input", 1),
@@ -1274,6 +1452,10 @@ def start_sweep(*_args) -> None:
             finish_sweep()
         elif kind == "error":
             by_id("sweep-status").innerHTML = f'<p class="sweep-error">Error: {html.escape(str(message.get("message")))}</p>'
+            # El traceback del código pegado se queda en el panel del editor,
+            # que es donde está la caja de texto que hay que corregir.
+            if message.get("traza"):
+                report_engine_error(message)
             finish_sweep()
         elif kind in {"loading", "start"}:
             if kind == "loading":
@@ -1325,6 +1507,7 @@ def bind_events() -> None:
     listen(by_id("algorithm-select"), "change", on_algorithm_change)
     listen(by_id("algorithm-params"), "change", on_param_change)
     listen(by_id("algorithm-params"), "input", on_param_change)
+    listen(by_id("user-code"), "input", on_user_code_change)
     listen(by_id("simulate-btn"), "click", simulate)
     listen(by_id("toggle-simulation-btn"), "click", toggle_simulation)
     listen(by_id("reset-simulation-btn"), "click", reset_simulation)

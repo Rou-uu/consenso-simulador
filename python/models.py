@@ -120,6 +120,10 @@ class AppState:
     round_running: bool = False
     round_before: GraphTab | None = None
     round_tab_id: str | None = None
+    # El codigo pegado en la ranura de usuario. Viaja con cada mensaje al
+    # Worker: asi el Worker no tiene estado que sincronizar y recrearlo tras un
+    # plazo vencido no obliga a reinstalar nada.
+    user_source: str = ""
 
     @property
     def tab(self) -> GraphTab:

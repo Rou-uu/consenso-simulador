@@ -63,6 +63,40 @@
               <select id="algorithm-select" class="algorithm-select"></select>
               <div id="algorithm-params" class="agreed-input-wrapper" hidden></div>
             </div>
+            <!-- Ranura de código propio. El fuente viaja con cada simulación y se
+                 compila dentro del Worker, nunca aquí. Ver docs/09 §A.12. -->
+            <div id="user-algorithm" class="user-algorithm" hidden>
+              <label class="field-label" for="user-code">Tu algoritmo</label>
+              <textarea id="user-code" class="user-code" spellcheck="false" rows="16" aria-describedby="user-code-hint">
+# Cada nodo que recibió mensajes adopta el promedio de lo que le llegó.
+# La firma es fija: estos cinco argumentos, siempre.
+PESO = 1.0    # las constantes van aquí: la interfaz aún no edita parámetros
+
+def promedio(matrix, values, messages, params=None, *, rng=None):
+    nuevos = []
+    # OJO: messages[target, source] viene transpuesta.
+    for objetivo, recibidos in enumerate(messages):
+        emisores = np.where(recibidos != 0)[0]
+        if len(emisores) == 0:
+            nuevos.append((native_scalar(values[objetivo]), None))
+        else:
+            nuevos.append((PESO * float(np.mean(values[emisores])), None))
+    return nuevos
+
+
+register(AlgorithmSpec(
+    label="Promedio de lo recibido",
+    scalar=promedio,
+))
+</textarea>
+              <p id="user-code-hint" class="user-code-hint">
+                Se compila al pulsar «Simular». Tienes <code>np</code>,
+                <code>native_scalar</code>, <code>random_array</code> y
+                <code>random_index</code>. Agrega <code>batch=</code> para que
+                sirva también en el barrido.
+              </p>
+              <pre id="user-code-error" class="user-code-error" hidden></pre>
+            </div>
             <button id="simulate-btn" class="simulate-btn" type="button" disabled>Simular</button>
             <div id="simulation-results" class="simulation-results" hidden>
               <button id="toggle-simulation-btn" class="secondary-btn" type="button">Ver Antes</button>

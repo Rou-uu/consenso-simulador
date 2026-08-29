@@ -362,7 +362,7 @@ consenso-simulador/
 │   └── app.css                     # 79 L de líneas gigantes comprimidas. Cítalo por SELECTOR, nunca por número de línea
 │
 ├── js/
-│   ├── bootstrap.js                #  88 L · Runtime 1: baja Pyodide, monta los 9 .py y ejecuta app.py como __main__
+│   ├── bootstrap.js                #  88 L · Runtime 1: baja Pyodide, monta los 10 .py y ejecuta app.py como __main__
 │   └── sweep-worker.js             # 102 L · Runtime 2: el Web Worker del sweep; monta 6 .py y hace de puente postMessage
 │
 ├── python/
@@ -437,23 +437,23 @@ https://simulador.ruee.dev/ quedan descargables `scripts/`, `docs/`,
 | **NumPy (verificación)** | `2.4.5` | `.github/workflows/pages.yml`, paso «Instalar dependencias»: `pip install numpy==2.4.5`. Es la versión con la que se grabó la línea base. |
 | **Python (verificación)** | `3.12` | `.github/workflows/pages.yml`, `actions/setup-python@v5` → `python-version: "3.12"`. |
 | **NumPy (navegador)** | la que traiga Pyodide 314.0.2 | `pyodide.loadPackage("numpy")` en `js/bootstrap.js` y `js/sweep-worker.js`. **No es la misma que la de verificación**: son dos entornos distintos. |
-| **Archivos montados en el runtime principal** | **9** | `PYTHON_FILES`, `js/bootstrap.js:4-14`: `app.py`, `models.py`, `geometry.py`, `simulation/__init__.py`, `simulation/registry.py`, `simulation/rng.py`, `simulation/algorithms.py`, `simulation/engine.py`, `simulation/sweep.py`. |
-| **Archivos montados en el Worker** | **6** | `SWEEP_FILES`, `js/sweep-worker.js:4-11`: `simulation/__init__.py`, `registry.py`, `rng.py`, `algorithms.py`, `engine.py`, `sweep.py`. **Sin** `app.py`, `models.py` ni `geometry.py`. |
+| **Archivos montados en el runtime principal** | **10** | `PYTHON_FILES`, `js/bootstrap.js:4-15`: `app.py`, `models.py`, `geometry.py`, `simulation/__init__.py`, `simulation/registry.py`, `simulation/rng.py`, `simulation/algorithms.py`, `simulation/usuario.py`, `simulation/engine.py`, `simulation/sweep.py`. |
+| **Archivos montados en el Worker** | **7** | `SWEEP_FILES`, `js/sweep-worker.js:4-12`: `simulation/__init__.py`, `registry.py`, `rng.py`, `algorithms.py`, `usuario.py`, `engine.py`, `sweep.py`. **Sin** `app.py`, `models.py` ni `geometry.py`. |
 | **Casos de la línea base** | **1026** | `scripts/equivalencia_baseline.json` (1026 claves). Lo imprime el propio arnés: `OK — 1026 casos idénticos a la línea base.` |
 | **Algoritmos cubiertos por el arnés** | `("fv", "amp")` | `ALGORITMOS`, `scripts/equivalencia.py:187`. |
 | **Semillas del arnés** | `(0, 1, 7, 42, 1234)` | `SEMILLAS`, `scripts/equivalencia.py:188`. |
-| **Puntos de p** | mín `2`, máx `1001`, por defecto `201` | `index.html:127` (atributos del `<input>`) y `sweep.py:275` (`_validated_int`). |
-| **Simulaciones totales por p** | mín `1`, máx `50000`, por defecto `5000` | `index.html:130` y `sweep.py:276-278`. |
-| **Iteraciones (refinamiento)** | mín `1`, máx `1000`, por defecto `50` | `index.html:133` y `sweep.py:279`. |
-| **Rondas por simulación** | mín `1`, máx `1000`, por defecto `1` | `index.html:136` y `sweep.py:280`. |
+| **Puntos de p** | mín `2`, máx `1001`, por defecto `201` | `index.html:161` (atributos del `<input>`) y `sweep.py:275` (`_validated_int`). |
+| **Simulaciones totales por p** | mín `1`, máx `50000`, por defecto `5000` | `index.html:164` y `sweep.py:276-278`. |
+| **Iteraciones (refinamiento)** | mín `1`, máx `1000`, por defecto `50` | `index.html:167` y `sweep.py:279`. |
+| **Rondas por simulación** | mín `1`, máx `1000`, por defecto `1` | `index.html:170` y `sweep.py:280`. |
 | **`agreed` (AMP)** | `0.5` | `AGREED_DEFAULT` en `python/simulation/algorithms.py`. |
 | **Puerto / host del servidor local** | `8000` / `127.0.0.1` | `scripts/serve.py`, `parse_args()`; y la configuración local del entorno. |
 
 **DEUDA CONOCIDA** — los cuatro límites del sweep están escritos **dos veces**:
-como atributos HTML en `index.html:127-136` y como argumentos de
+como atributos HTML en `index.html:161-170` y como argumentos de
 `_validated_int` en `sweep.py:275-280`. No hay nada que los mantenga
 sincronizados. Peor: la lectura del lado de la app, `positive_int` en
-`app.py:1212`, **solo aplica el mínimo, no el máximo**. Es decir, el techo real
+`app.py:1389`, **solo aplica el mínimo, no el máximo**. Es decir, el techo real
 lo impone `_validated_int` **dentro del Worker**, y si lo excedes el error llega
 como texto en `#sweep-status`, no como validación del formulario.
 
@@ -478,7 +478,7 @@ flowchart TB
       subgraph MAIN["RUNTIME 1 · Hilo principal · lo arranca js/bootstrap.js"]
         direction TB
         M1["Pyodide 314.0.2 + NumPy<br/>descargados de jsDelivr"]
-        M2["monta PYTHON_FILES = 9 archivos en /python<br/>app.py · models.py · geometry.py<br/>simulation/: __init__ registry rng algorithms engine sweep"]
+        M2["monta PYTHON_FILES = 10 archivos en /python<br/>app.py · models.py · geometry.py<br/>simulation/: __init__ registry rng algorithms usuario engine sweep"]
         M3["ejecuta app.py como __main__"]
         M4["<b>STATE = AppState&#40;&#41;</b><br/>AQUÍ VIVE TODO EL ESTADO<br/>pestañas, nodos, aristas, zoom, pan,<br/>algoritmo activo y sus params, simulación"]
         M5["render del SVG + 40 listeners<br/>+ Simular → mensaje al worker"]
@@ -488,7 +488,7 @@ flowchart TB
       subgraph WORKER["RUNTIME 2 · Web Worker · js/sweep-worker.js · se crea al pulsar «Ejecutar sweep»"]
         direction TB
         W1["Pyodide 314.0.2 + NumPy<br/>descargados OTRA VEZ de jsDelivr"]
-        W2["monta SWEEP_FILES = 6 archivos<br/>solo simulation/<br/>SIN app.py, models.py ni geometry.py"]
+        W2["monta SWEEP_FILES = 7 archivos<br/>solo simulation/<br/>SIN app.py, models.py ni geometry.py"]
         W3["iter_sweep&#40;...&#41;<br/>SIN ESTADO PROPIO:<br/>todo llega en el mensaje"]
         W1 --> W2 --> W3
       end

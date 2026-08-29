@@ -29,7 +29,7 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/smoke_ui.py
 `equivalencia.py` sale con `0` si todo coincide (`equivalencia.py:473-474`), con
 `1` si hay diferencias (`equivalencia.py:481`) y con `2` si no encuentra la línea
 base (`equivalencia.py:467`). `smoke_ui.py` sale con `1` cuando alguna
-comprobación falla (`smoke_ui.py:394-398`) y termina normalmente —código `0`— si
+comprobación falla (`smoke_ui.py:395-399`) y termina normalmente —código `0`— si
 todas pasan.
 
 ### 1.1 El entorno en el que el resultado significa algo
@@ -499,12 +499,12 @@ Esos `1.43` y `1.94` **son imposibles** si la máscara fuera booleana.
   observable**: el usuario los ve. El más interesante registra a propósito un
   algoritmo `solo_escalar` sin versión vectorizada (`equivalencia.py:351-360`)
   para congelar que el barrido **distinga** "no existe" de "existe pero no tiene
-  `batch`" (`registry.batch_of`, `registry.py:85-103`). Antes daban el mismo
+  `batch`" (`registry.batch_of`, `registry.py:91-109`). Antes daban el mismo
   mensaje engañoso.
 
   **Trampa de mantenimiento:** ese registro va protegido por
   `if "solo_escalar" not in registry.KEYS` (`equivalencia.py:351`) porque
-  `registry.register` rechaza claves repetidas (`registry.py:70-71`). Si mueves
+  `registry.register` rechaza claves repetidas (`registry.py:76-77`). Si mueves
   el bloque más arriba dentro de `capturar()` o llamas a `capturar()` dos veces
   en el mismo proceso sin esa guarda, el script revienta.
 
@@ -602,10 +602,10 @@ dobles mínimos **antes** de importar `app`:
 
 ```mermaid
 flowchart TB
-    START(["python3 scripts/smoke_ui.py"]) --> DOB["instalar_dobles() — smoke_ui.py:155"]
+    START(["python3 scripts/smoke_ui.py"]) --> DOB["instalar_dobles() — smoke_ui.py:156"]
     DOB --> SYS["sys.modules['js'] = modulo falso<br/>sys.modules['pyodide.ffi'] = ffi falso<br/>create_proxy = identidad, to_js = identidad"]
-    SYS --> DOC["DOCUMENTO = FakeDocument()<br/>smoke_ui.py:179"]
-    DOC --> IMP["import app — smoke_ui.py:181<br/>NO ejecuta main(): esta bajo<br/>if __name__ == '__main__' (app.py:1353)"]
+    SYS --> DOC["DOCUMENTO = FakeDocument()<br/>smoke_ui.py:180"]
+    DOC --> IMP["import app — smoke_ui.py:182<br/>NO ejecuta main(): esta bajo<br/>if __name__ == '__main__' (app.py:1536)"]
     IMP --> C1["1. render_algorithm_options: el select<br/>sale de registry.specs()"]
     C1 --> C2["2. render_algorithm_params: los campos<br/>salen de los ParamSpec"]
     C2 --> C3["3. on_param_change: editar llega a<br/>algorithm_params(); un valor invalido no pisa"]
@@ -613,42 +613,43 @@ flowchart TB
     C4 --> C5["5. registry.register de un algoritmo 'zz':<br/>aparece solo, sin tocar app.py ni index.html"]
     C5 --> C6["6. nice_axis / render_chart:<br/>el eje Y usa numeros redondos"]
     C6 --> C7["7. la ronda va y vuelve por el worker:<br/>bloqueo, resultado y desbloqueo"]
-    C7 --> OUT{"¿FALLAS?"}
+    C7 --> C8["8. la ranura de codigo propio:<br/>clave forzada, errores por etapa"]
+    C8 --> OUT{"¿FALLAS?"}
     OUT -->|"vacia"| OK["exit 0 + recordatorio de que<br/>esto NO sustituye el navegador"]
-    OUT -->|"no vacia"| KO["exit 1 con la lista — smoke_ui.py:394-398"]
+    OUT -->|"no vacia"| KO["exit 1 con la lista — smoke_ui.py:395-399"]
 ```
 
-Los dobles son deliberadamente tontos: `FakeElement` (`smoke_ui.py:55-77`) es un
-saco de atributos, `FakeClassList` (`smoke_ui.py:38-52`) un `set`. Las
+Los dobles son deliberadamente tontos: `FakeElement` (`smoke_ui.py:56-78`) es un
+saco de atributos, `FakeClassList` (`smoke_ui.py:39-53`) un `set`. Las
 comprobaciones leen el `innerHTML` generado con expresiones regulares
-(`smoke_ui.py:200-207`), que es todo lo que se necesita para verificar *qué* HTML
+(`smoke_ui.py:201-208`), que es todo lo que se necesita para verificar *qué* HTML
 produce Python.
 
 ### 8.2 Qué cubre de verdad
 
-Las siete secciones no son "tests del render": son **los invariantes del diseño de
+Las ocho secciones no son "tests del render": son **los invariantes del diseño de
 registro** más el protocolo de la ronda, la propiedad que las reglas de trabajo del proyecto marcan como no negociable —
 *«Si un cambio para agregar un algoritmo toca `engine.py`, `sweep.py`, `app.py` o
 `index.html`, se salió del diseño»*.
 
 - **Secciones 1-2** — el `<select>` es exactamente `registry.KEYS` y la etiqueta
-  visible sale del `AlgorithmSpec`, no de `index.html` (`smoke_ui.py:226-237`).
-  Los campos de parámetros salen de los `ParamSpec` (`smoke_ui.py:248`), y el
+  visible sale del `AlgorithmSpec`, no de `index.html` (`smoke_ui.py:227-238`).
+  Los campos de parámetros salen de los `ParamSpec` (`smoke_ui.py:249`), y el
   contenedor se oculta cuando el algoritmo no declara ninguno
-  (`smoke_ui.py:241-244`).
+  (`smoke_ui.py:242-245`).
 - **Sección 3** — un valor no numérico en el campo **no pisa** el anterior
-  (`smoke_ui.py:258-262`), que es el `except ValueError: return` de
-  `app.py:1031-1034`.
+  (`smoke_ui.py:259-263`), que es el `except ValueError: return` de
+  `app.py:1098-1101`.
 - **Sección 4** — cambiar de algoritmo y volver conserva lo escrito, porque el
-  estado vive en `STATE.algorithm_params` por algoritmo (`app.py:144-145`).
+  estado vive en `STATE.algorithm_params` por algoritmo (`app.py:174-175`).
 - **Sección 5** — la prueba más valiosa: registra un algoritmo `zz` inventado con
   dos parámetros y comprueba que aparece en el selector, genera sus dos campos y
   expone sus defaults **sin tocar `app.py` ni `index.html`**
-  (`smoke_ui.py:276-296`). Si alguien mete un `if algorithm == "amp"` en la
+  (`smoke_ui.py:277-297`). Si alguien mete un `if algorithm == "amp"` en la
   interfaz, esto se pone rojo.
-- **Sección 6** — `nice_axis` (`app.py:351`) y `render_chart` (`app.py:424`).
+- **Sección 6** — `nice_axis` (`app.py:417`) y `render_chart` (`app.py:490`).
   Además de casos concretos, hace dos comprobaciones de propiedad sobre 4000
-  valores (`smoke_ui.py:339-352`): que **el tope siempre cubre el dato** (la curva
+  valores (`smoke_ui.py:340-353`): que **el tope siempre cubre el dato** (la curva
   nunca se sale de la gráfica) y que el aire desperdiciado tiene mediana < 20 %.
   Es la única comprobación cuantitativa de la UI en todo el proyecto.
 - **Sección 7** — el corte de `simulate` en dos mitades. `FakeWorker` recibe el
@@ -660,11 +661,25 @@ registro** más el protocolo de la ronda, la propiedad que las reglas de trabajo
   botón se desbloqueó — y repite por la **ruta de error**, donde nada se repinta
   y el botón tiene que soltarse igual. Ese embudo (`finish_round`) es lo único
   que separa un fallo del motor de una interfaz trabada para siempre.
+- **Sección 8** — la ranura de código propio, sus dos mitades. La del motor
+  instala código que pide la clave `fv` y comprueba que acabe en `user_alg` con
+  `fv` intacto, que `updated` caiga en su valor por omisión y que los cuatro
+  modos de fallo —no compila, no registra nada, revienta, declara `params`—
+  eleven cada uno lo suyo. La de interfaz comprueba que el fuente viaje en el
+  mensaje sólo cuando la ranura está activa, y que el traceback llegue recortado
+  a las líneas de quien lo escribió.
+
+  El bloque del instalador corre sobre una **copia** del registro y la restaura
+  al terminar. No es limpieza cosmética: en producción hay dos registros —el del
+  hilo principal, que es el catálogo de la interfaz, y el del Worker, donde se
+  compila— y aquí comparten proceso. Sin la copia, vaciar la ranura al probar un
+  fallo dejaría al selector sin una entrada que espera, un choque que la
+  aplicación real no puede tener.
 
 ### 8.3 Qué NO cubre — y el script te lo recuerda al salir
 
-El propio docstring lo dice (`smoke_ui.py:15-16`) y la última línea del programa
-lo repite (`smoke_ui.py:400`): *«Recordatorio: esto NO sustituye el recorrido
+El propio docstring lo dice (`smoke_ui.py:16-17`) y la última línea del programa
+lo repite (`smoke_ui.py:401`): *«Recordatorio: esto NO sustituye el recorrido
 visual en navegador.»*
 
 Fuera de alcance, por construcción:
@@ -672,11 +687,11 @@ Fuera de alcance, por construcción:
 - **Estilos y layout.** `css/app.css` no se carga nunca. Todo el CSS muerto o
   invisible que hay hoy —incluido el color de las aristas— es invisible también
   para este script: ver [03](03-interfaz.md).
-- **Eventos reales.** `editar_campo` (`smoke_ui.py:216-220`) llama a
+- **Eventos reales.** `editar_campo` (`smoke_ui.py:217-221`) llama a
   `app.on_param_change` a mano con un objeto falso. El `addEventListener` real
   nunca se ejercita, ni la delegación en el contenedor.
 - **`retain()` y el ciclo de vida de los proxies.** `create_proxy` es la identidad
-  en los dobles (`smoke_ui.py:171`), así que la trampa nº 1 del proyecto es
+  en los dobles (`smoke_ui.py:172`), así que la trampa nº 1 del proyecto es
   **completamente invisible** aquí: un `retain()` olvidado deja el evento muerto
   sin ningún error en pantalla. El mecanismo está explicado en
   [03](03-interfaz.md).
@@ -685,7 +700,7 @@ Fuera de alcance, por construcción:
   **solo dentro del navegador**; ningún script lo detecta. Ver
   [01](01-arranque.md).
 - **El Worker de verdad y el sweep.** `smoke_ui.py` sustituye `js.Worker` por
-  `FakeWorker` (`smoke_ui.py:169`), un doble que corre el motor **real** pero en
+  `FakeWorker` (`smoke_ui.py:170`), un doble que corre el motor **real** pero en
   la misma llamada. Eso sí cubre el protocolo de la ronda —mensaje, respuesta,
   bloqueo y desbloqueo del botón, sección 7— y **no** cubre nada del Pyodide
   aparte: ni el arranque del Worker, ni la latencia real, ni el sweep, que aquí
@@ -695,7 +710,7 @@ Fuera de alcance, por construcción:
   **solo mirando**.
 
 **DEUDA CONOCIDA — trampa concreta y fácil de pisar:**
-`FakeDocument.getElementById` usa `setdefault` (`smoke_ui.py:92-93`), así que
+`FakeDocument.getElementById` usa `setdefault` (`smoke_ui.py:93-94`), así que
 **siempre** devuelve un elemento, aunque el `id` no exista en `index.html`. Si
 borras `<div id="algorithm-params">` del HTML, `smoke_ui.py` sigue pasando en
 verde y la aplicación real se rompe. El script verifica el HTML que Python

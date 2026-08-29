@@ -6,6 +6,7 @@ const SWEEP_FILES = [
   "python/simulation/registry.py",
   "python/simulation/rng.py",
   "python/simulation/algorithms.py",
+  "python/simulation/usuario.py",
   "python/simulation/engine.py",
   "python/simulation/sweep.py",
 ];
@@ -69,6 +70,27 @@ function mensajeLegible(error) {
   return conClase ? conClase[1] : ultima.trim();
 }
 
+// El ultimo fuente instalado. Compilar cuesta, y el codigo viaja en CADA
+// mensaje para que el worker no tenga estado que sincronizar: comparar la cadena
+// evita recompilar en cada clic sin reintroducir ese estado.
+let fuenteInstalada = null;
+
+async function instalarFuente(fuente) {
+  const pyodide = await runtimePromise;
+  if (fuente === fuenteInstalada) {
+    return;
+  }
+  pyodide.globals.set("_fuente_usuario", fuente);
+  await pyodide.runPythonAsync(`
+from simulation import usuario
+
+usuario.instalar(_fuente_usuario)
+`);
+  // Solo despues del await: si la instalacion falla, el proximo mensaje
+  // reintenta en vez de dar por buena una compilacion que nunca ocurrio.
+  fuenteInstalada = fuente;
+}
+
 // Una sola ronda para el editor. Devuelve el resultado ya serializado: el
 // contrato de `run_round` promete floats nativos y `None`, asi que el viaje por
 // JSON no pierde nada y evita convertir proxies de Python en el otro lado.
@@ -123,7 +145,15 @@ self.onmessage = async (event) => {
     return;
   }
 
+  const fuente = event.data?.params?.fuente;
+  // Que el fallo diga en que etapa ocurrio: "no compila" y "revento a medio
+  // correr" son dos problemas distintos y se arreglan distinto.
+  let etapa = "compilar";
   try {
+    if (fuente) {
+      await instalarFuente(fuente);
+    }
+    etapa = "correr";
     if (tipo === "ronda") {
       self.postMessage({ type: "ronda", resultado: await correrRonda(event.data) });
       return;
@@ -131,6 +161,15 @@ self.onmessage = async (event) => {
     await correrBarrido(event.data);
     self.postMessage({ type: "end" });
   } catch (error) {
-    self.postMessage({ type: "error", message: mensajeLegible(error) });
+    const texto = error instanceof Error ? error.message : String(error);
+    self.postMessage({
+      type: "error",
+      etapa,
+      message: mensajeLegible(error),
+      // El traceback completo solo cuando el codigo es de quien usa la app: en
+      // los algoritmos de casa es ruido, pero ahi es el numero de linea que
+      // hace falta para depurar.
+      traza: fuente ? texto : null,
+    });
   }
 };

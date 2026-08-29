@@ -59,6 +59,12 @@ class AlgorithmSpec:
 
 REGISTRY: dict[str, AlgorithmSpec] = {}
 
+#: Clave reservada para el algoritmo que escribe quien usa la aplicacion. Es
+#: fija y unica a proposito: con una sola ranura no hay colisiones que resolver
+#: ni forma de que un algoritmo pegado tape a `fv` o a `amp`. La instala
+#: `simulation.usuario`; `register` no la trata distinto.
+CLAVE_USUARIO = "user_alg"
+
 
 def register(spec: AlgorithmSpec) -> AlgorithmSpec:
     """Agrega un algoritmo al registro y lo devuelve.
@@ -147,6 +153,7 @@ UPDATED = _AttributeView("updated")
 
 __all__ = [
     "BATCH",
+    "CLAVE_USUARIO",
     "KEYS",
     "REGISTRY",
     "SCALAR",

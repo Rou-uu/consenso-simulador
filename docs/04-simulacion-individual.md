@@ -1,16 +1,16 @@
 # 04 — Flujo de una simulación individual: del clic en «Simular» al pixel
 
-> **Archivos que cubre:** `python/simulation/engine.py`, `python/simulation/algorithms.py`, `python/simulation/rng.py`, y de `python/app.py` el tramo `apply_propagation` → `simulate` → `toggle_simulation` → `reset_simulation` (líneas 1028-1092) más `edge_style` (`app.py:221`) y `render_canvas` (`app.py:233`).
+> **Archivos que cubre:** `python/simulation/engine.py`, `python/simulation/algorithms.py`, `python/simulation/rng.py`, y de `python/app.py` el tramo `apply_propagation` → `simulate` → `toggle_simulation` → `reset_simulation` (líneas 1028-1092) más `edge_style` (`app.py:287`) y `render_canvas` (`app.py:299`).
 > **Qué puedes cambiar aquí:** la regla de actualización de un algoritmo y su predicado `updated` dentro de `algorithms.py`; los colores y grosores que devuelve `edge_style`; el orden de las llamadas dentro de `simulate`.
 > **Qué es intocable y por qué:** la transposición de `messages` (`engine.py:114`) y la máscara `np.ceil` (`engine.py:107`). Son el port literal del backend de referencia y la línea base de equivalencia compara sus salidas valor por valor: tocarlas rompe los 1026 casos y desalinea el motor escalar del vectorizado.
 > **Cómo verificas el cambio:** `PYTHONDONTWRITEBYTECODE=1 python3 scripts/equivalencia.py` — debe imprimir `OK — 1026 casos idénticos a la línea base.`
 
 Esta sección sigue **un solo dato** desde que el usuario aprieta el botón hasta que un
-pixel cambia en el SVG. El botón vive en `index.html:66`, el listener se registra en
-`app.py:1328`, y el código Python llegó al sistema de archivos virtual de Pyodide por
-`mountPythonFiles` (`js/bootstrap.js:44-50`, invocada en `js/bootstrap.js:65`) para
+pixel cambia en el SVG. El botón vive en `index.html:100`, el listener se registra en
+`app.py:1511`, y el código Python llegó al sistema de archivos virtual de Pyodide por
+`mountPythonFiles` (`js/bootstrap.js:45-51`, invocada en `js/bootstrap.js:66`) para
 después ser ejecutado con `runpy.run_path("/python/app.py")` dentro de `runPythonAsync`
-(`js/bootstrap.js:67-75`). Ver [01 — Arranque del sistema](01-arranque.md).
+(`js/bootstrap.js:68-76`). Ver [01 — Arranque del sistema](01-arranque.md).
 
 Una ronda en una frase: **se sortea qué aristas transmiten, y cada nodo que recibió al
 menos un mensaje decide qué valor adopta según el algoritmo elegido.** Un sorteo, un
@@ -20,7 +20,7 @@ Todo el recorrido de esta sección ocurre dentro del navegador: no hay backend, 
 build, no hay petición HTTP en el camino del botón. **Esa frase vale para la ronda
 individual con el runtime ya caliente, no para la aplicación completa:** la primera carga
 descarga Pyodide y NumPy desde jsDelivr, y cada barrido vuelve a descargarlos porque el
-Worker se destruye con `WORKER.terminate()` (`app.py:1229` y `app.py:1294`) — ver
+Worker se destruye con `WORKER.terminate()` (`app.py:1406` y `app.py:1476`) — ver
 [05 — El barrido](05-barrido-sweep.md).
 
 ---
@@ -29,37 +29,37 @@ Worker se destruye con `WORKER.terminate()` (`app.py:1229` y `app.py:1294`) — 
 
 | # | Función | Archivo | Rol |
 |---|---------|---------|-----|
-| 1 | `simulate` | `app.py:1055` | **Mitad que manda.** Arma la entrada, bloquea el botón, suelta el mensaje y termina. |
-| 2 | despacho `ronda` | `js/sweep-worker.js:120` | El worker reconoce el mensaje y llama a `correrRonda` (`:72`). |
+| 1 | `simulate` | `app.py:1122` | **Mitad que manda.** Arma la entrada, bloquea el botón, suelta el mensaje y termina. |
+| 2 | despacho `ronda` | `js/sweep-worker.js:142` | El worker reconoce el mensaje y llama a `correrRonda` (`:72`). |
 | 2b | `run_round` | `engine.py:179` | Puerta de entrada al motor, **ya dentro del worker**. |
 | 3 | `get_adj` / `get_values` | `engine.py:41` / `engine.py:72` | JSON → matriz `(n,n)` y vector `(n,)`. |
 | 4 | `who_gets_message` | `engine.py:83` | El sorteo. Devuelve `messages` **ya transpuesta**. |
-| 5 | `registry.get(...).scalar` | `registry.py:76` | Despacho al algoritmo por clave, sin ningún `if` por nombre. |
+| 5 | `registry.get(...).scalar` | `registry.py:82` | Despacho al algoritmo por clave, sin ningún `if` por nombre. |
 | 6 | `fv` / `amp` | `algorithms.py:51` / `algorithms.py:144` | Regla de actualización de valores. |
 | 7 | `propagation_from_round` | `engine.py:118` | Traza: un registro por arista que disparó. |
 | 8 | `fv_updated` / `amp_updated` | `algorithms.py:109` / `algorithms.py:188` | Predicado que decide si una entrega cuenta como actualización. |
-| 9 | `apply_round` | `app.py:1095` | **Mitad que recibe.** Aplica el resultado al snapshot que quedó esperando. |
-| 10 | `apply_propagation` | `app.py:1039` | Escribe `Edge.highlight` en el grafo visible. |
-| 11 | `finish_round` | `app.py:1135` | Embudo: desbloquea el botón, venga de donde venga la salida. |
-| 12 | `render_all` → `render_canvas` | `app.py:532` / `app.py:233` | Regenera el SVG completo por `innerHTML`. |
+| 9 | `apply_round` | `app.py:1168` | **Mitad que recibe.** Aplica el resultado al snapshot que quedó esperando. |
+| 10 | `apply_propagation` | `app.py:1106` | Escribe `Edge.highlight` en el grafo visible. |
+| 11 | `finish_round` | `app.py:1208` | Embudo: desbloquea el botón, venga de donde venga la salida. |
+| 12 | `render_all` → `render_canvas` | `app.py:599` / `app.py:299` | Regenera el SVG completo por `innerHTML`. |
 
 **INVARIANTE — el motor no corre en el hilo principal.** `app.py` no importa nada de
 `simulation.engine`. Las dos entradas al motor viven dentro del worker:
-`from simulation.engine import run_round` para la ronda (`js/sweep-worker.js:78`) y
-`from simulation.sweep import iter_sweep` para el barrido (`js/sweep-worker.js:104`).
+`from simulation.engine import run_round` para la ronda (`js/sweep-worker.js:100`) y
+`from simulation.sweep import iter_sweep` para el barrido (`js/sweep-worker.js:126`).
 `sweep.py:28` toma de `engine` sólo `get_adj` y `get_values`. Dos motores, dos entradas,
 un solo módulo compartido — y el hilo principal no ejecuta ninguno: manda mensajes y
 pinta lo que le contestan. Detalle completo en
 [09 — Invariantes §A.12](09-invariantes-y-deuda.md).
 
 **Tres mensajes, no uno.** El worker manda `listo` cuando su runtime terminó de cargar
-(`js/sweep-worker.js:56`), `ronda` con el resultado, y `error` si algo falló. El primero
+(`js/sweep-worker.js:57`), `ronda` con el resultado, y `error` si algo falló. El primero
 existe porque la primera simulación espera a que el worker baje Pyodide y NumPy: hasta
-que llega, el botón dice *«Cargando motor…»* en vez de *«Simulando…»* (`app.py:507-512`).
+que llega, el botón dice *«Cargando motor…»* en vez de *«Simulando…»* (`app.py:574-579`).
 
-**Dos instancias del mismo worker, a propósito.** `ENGINE` (`app.py:1148`) es permanente
+**Dos instancias del mismo worker, a propósito.** `ENGINE` (`app.py:1321`) es permanente
 y atiende las rondas; el del barrido es desechable y se destruye con `terminate()` al
-cancelar (`app.py:1229`). Si compartieran instancia, cancelar un barrido dejaría al
+cancelar (`app.py:1406`). Si compartieran instancia, cancelar un barrido dejaría al
 editor sin motor.
 
 ---
@@ -70,7 +70,7 @@ editor sin motor.
 sequenceDiagram
     autonumber
     actor U as Usuario
-    participant BTN as boton simulate-btn, index.html:66
+    participant BTN as boton simulate-btn, index.html:100
     participant APP as app.simulate() y app.apply_round()
     participant W as worker js/sweep-worker.js
     participant RR as engine.run_round()
@@ -84,10 +84,10 @@ sequenceDiagram
     participant RC as render_all y render_canvas
 
     U->>BTN: clic
-    BTN->>APP: evento click, listener en app.py:1328
-    Note over APP: before = graph_snapshot(STATE.initial_graph or STATE.tab)<br/>app.py:1071 -- SIEMPRE el grafo inicial
-    Note over APP: STATE.round_before = before, app.py:1074<br/>lo que era una local ahora espera en el estado
-    APP->>W: postMessage tipo ronda: graph, algorithm, algorithmParams<br/>app.py:1080-1092
+    BTN->>APP: evento click, listener en app.py:1511
+    Note over APP: before = graph_snapshot(STATE.initial_graph or STATE.tab)<br/>app.py:1138 -- SIEMPRE el grafo inicial
+    Note over APP: STATE.round_before = before, app.py:1141<br/>lo que era una local ahora espera en el estado
+    APP->>W: postMessage tipo ronda: graph, algorithm, algorithmParams<br/>app.py:1158-1163
     Note right of APP: aqui TERMINA simulate(): el boton queda bloqueado<br/>y el hilo principal sigue respondiendo
     W->>RR: run_round(graph, algorithm, params)
 
@@ -113,13 +113,13 @@ sequenceDiagram
 
     RR-->>W: dict values valuesBefore selectedSources messages probabilities propagation discrepancy algorithm
     Note over W: json.dumps: el contrato promete floats nativos y None,<br/>asi que el viaje por JSON no pierde nada
-    W-->>APP: mensaje tipo ronda -- lo recoge apply_round(), app.py:1095
+    W-->>APP: mensaje tipo ronda -- lo recoge apply_round(), app.py:1168
 
-    Note over APP: after = before.clone() · node.value = values[i]<br/>app.py:1117-1120
+    Note over APP: after = before.clone() · node.value = values[i]<br/>app.py:1190-1193
     APP->>AP: apply_propagation(after.edges, propagation)
     AP-->>APP: Edge.highlight = updated, delivered o quiet
-    Note over APP: STATE.simulation = SimulationState(before, after, propagation)<br/>la pestaña visible se reemplaza por after, app.py:1124-1126
-    Note over APP: finish_round(), app.py:1135 -- desbloquea el boton<br/>lo llama tambien la ruta de error, que no repinta nada
+    Note over APP: STATE.simulation = SimulationState(before, after, propagation)<br/>la pestaña visible se reemplaza por after, app.py:1197-1199
+    Note over APP: finish_round(), app.py:1208 -- desbloquea el boton<br/>lo llama tambien la ruta de error, que no repinta nada
     APP->>RC: render_all()
     RC-->>U: SVG regenerado · en pantalla cambian los valores de los nodos<br/>y aparece la animacion de guiones en las aristas que dispararon
 ```
@@ -128,13 +128,13 @@ sequenceDiagram
 
 ## 3. Paso a paso, con formas de datos
 
-### 3.1 `simulate()` — la mitad que manda (`app.py:1055-1092`)
+### 3.1 `simulate()` — la mitad que manda (`app.py:1122-1163`)
 
 ```python
-before = graph_snapshot(STATE.initial_graph or STATE.tab)   # app.py:1071
+before = graph_snapshot(STATE.initial_graph or STATE.tab)   # app.py:1138
 if STATE.initial_graph is None:
-    STATE.initial_graph = before.clone()                     # app.py:1072-1073
-STATE.round_before = before                                  # app.py:1074
+    STATE.initial_graph = before.clone()                     # app.py:1139-1140
+STATE.round_before = before                                  # app.py:1141
 STATE.round_running = True
 render_controls()                                            # bloquea el botón
 ENGINE.postMessage(...)                                      # y aquí termina
@@ -149,17 +149,17 @@ cruzaba el corte por la pila ahora cruza por el estado.**
 
 La ruta de error se mudó con él. El `try/except` ya no puede envolver al motor, que corre
 en otro runtime: sus fallos llegan como un mensaje de tipo `error` que atiende
-`on_message` (`app.py:1163`) y que también termina en `finish_round`.
+`on_message` (`app.py:1336`) y que también termina en `finish_round`.
 
 Tres decisiones no obvias viven en esas líneas.
 
 **1. DECISIÓN DELIBERADA — la simulación SIEMPRE parte del grafo inicial, nunca del
 resultado anterior.** `STATE.initial_graph` (`models.py:103`) lo mantiene al día
-`mark_graph_changed` (`app.py:193-195`), que reasigna la foto **en cada cambio del grafo
+`mark_graph_changed` (`app.py:259-261`), que reasigna la foto **en cada cambio del grafo
 con nodos, mientras no haya una simulación en curso**:
 
 ```python
-def mark_graph_changed() -> None:              # app.py:193
+def mark_graph_changed() -> None:              # app.py:259
     if STATE.simulation is None and STATE.tab.nodes:
         STATE.initial_graph = graph_snapshot()
 ```
@@ -175,10 +175,10 @@ conservar el contrato observable del backend FastAPI original, y sólo los ejerc
 `scripts/equivalencia.py` (ver [07 — Verificación](07-verificacion.md)). Consecuencia
 práctica que hay que tener presente: la salvaguarda contra `NaN` de `update_graph_data`
 (`engine.py:300-305`, «un valor NaN no sobrescribe el nodo») **no está en el camino de la
-UI**; `simulate` asigna `node.value = values[index]` sin filtro (`app.py:1119-1120`).
+UI**; `simulate` asigna `node.value = values[index]` sin filtro (`app.py:1192-1193`).
 
 **3. INVARIANTE — `params` se arma solo, sin conocer ningún algoritmo por nombre.**
-`algorithm_params()` (`app.py:138-148`) mezcla los defaults declarados en el
+`algorithm_params()` (`app.py:168-178`) mezcla los defaults declarados en el
 `AlgorithmSpec` (`registry.py:54-57`) con lo que el usuario haya escrito, guardado por
 algoritmo en `STATE.algorithm_params` (`models.py:98`). Para FV el dict queda vacío `{}`;
 para AMP queda `{"agreed": 0.5}`. Meter aquí un `if algorithm == ...` rompe la promesa
@@ -286,8 +286,8 @@ mantiene así porque el proyecto de referencia hace exactamente esto y la línea
 flotantes exactos; «arreglarlo» con un `clip(0, 1)` rompe la equivalencia.
 
 El editor protege ese flanco por delante: el diálogo de peso exige el intervalo `(0, 1]`
-(`app.py:813-815`). **DEUDA CONOCIDA:** «Importar JSON» no valida pesos
-(`finish_import`, `app.py:973-982`; las aristas se construyen en `app.py:982` sin
+(`app.py:880-882`). **DEUDA CONOCIDA:** «Importar JSON» no valida pesos
+(`finish_import`, `app.py:1040-1049`; las aristas se construyen en `app.py:1049` sin
 comprobar rango), así que un archivo con `"weight": "1.5"` entra sin protesta y produce
 tasas de disparo que nadie espera.
 
@@ -339,9 +339,9 @@ updates = algorithm_fn(matrix, values, messages, params, rng=rng)
 ```
 
 **INVARIANTE — el motor no menciona ningún algoritmo por nombre.** Pide el `AlgorithmSpec`
-al registro (`registry.py:76-82`) y lo llama con la firma uniforme. `ALGORITHMS` y
+al registro (`registry.py:82-88`) y lo llama con la firma uniforme. `ALGORITHMS` y
 `PROPAGATION_PREDICATES` (`engine.py:35` y `engine.py:38`) son *vistas vivas* del
-diccionario del registro (`registry.py:141-145`), así que un algoritmo recién registrado
+diccionario del registro (`registry.py:147-151`), así que un algoritmo recién registrado
 aparece solo.
 
 Para que un algoritmo nuevo **funcione en la aplicación** basta editar
@@ -390,11 +390,11 @@ cambiarlo: `fv_updated` compara `selected_source == source_index` y `None == int
 desde el editor, y por eso las ramas correspondientes siguen vivas:
 
 * `open_node_editor` hace `node.value = float(value)` y sólo atrapa `ValueError`
-  (`app.py:775-780`), de modo que escribir `nan` o `inf` en el diálogo se acepta sin error.
-* `finish_import` usa `json.loads` (`app.py:973-982`), que por omisión acepta el literal
+  (`app.py:842-847`), de modo que escribir `nan` o `inf` en el diálogo se acepta sin error.
+* `finish_import` usa `json.loads` (`app.py:1040-1049`), que por omisión acepta el literal
   `NaN`.
 
-De ahí que `number_label` (`app.py:124-131`, rama `math.isnan` en `app.py:126-127`) y
+De ahí que `number_label` (`app.py:154-161`, rama `math.isnan` en `app.py:156-157`) y
 `value_color` (`geometry.py:20-31`, rama en `geometry.py:23-24`) lo sigan contemplando.
 **DEUDA CONOCIDA:** la validación de valores de nodo es más laxa que la de pesos de arista,
 sin motivo declarado.
@@ -431,17 +431,17 @@ sólo recorre aristas y la regla vive en el algoritmo. Cambiar un predicado camb
 ### 3.7 Vuelta a `app.py` — `apply_propagation` y `SimulationState`
 
 ```python
-values = list(result["values"])                                        # app.py:1117
-after = before.clone()                                                 # app.py:1118
+values = list(result["values"])                                        # app.py:1190
+after = before.clone()                                                 # app.py:1191
 for index, node in enumerate(after.nodes):
-    node.value = values[index]                                         # app.py:1119-1120
-propagation = [dict(item) for item in result.get("propagation", [])]   # app.py:1121
-apply_propagation(after.edges, propagation)                            # app.py:1122
-STATE.simulation = SimulationState(before, after, propagation)         # app.py:1123
+    node.value = values[index]                                         # app.py:1192-1193
+propagation = [dict(item) for item in result.get("propagation", [])]   # app.py:1194
+apply_propagation(after.edges, propagation)                            # app.py:1195
+STATE.simulation = SimulationState(before, after, propagation)         # app.py:1196
 ```
 
-`apply_propagation` (`app.py:1039-1052`) busca, para cada `Edge`, el **primer** registro de
-propagación cuyo par `(source, target)` coincida (`app.py:1041-1048`), y escribe
+`apply_propagation` (`app.py:1106-1119`) busca, para cada `Edge`, el **primer** registro de
+propagación cuyo par `(source, target)` coincida (`app.py:1108-1115`), y escribe
 `Edge.highlight` (`models.py:42`):
 
 ```mermaid
@@ -451,48 +451,48 @@ flowchart TD
     B -- si --> C{"item.updated_value"}
     C -- True --> U["edge.highlight = updated"]
     C -- False --> D["edge.highlight = delivered"]
-    Q --> S["edge_style, app.py:221"]
+    Q --> S["edge_style, app.py:287"]
     U --> S
     D --> S
-    S --> R["render_canvas, app.py:253-254<br/>emite stroke y stroke-width como<br/>ATRIBUTOS DE PRESENTACION<br/>que el CSS sobreescribe: ver 3.8"]
+    S --> R["render_canvas, app.py:319-320<br/>emite stroke y stroke-width como<br/>ATRIBUTOS DE PRESENTACION<br/>que el CSS sobreescribe: ver 3.8"]
 ```
 
 Luego la pestaña visible se **reemplaza** por una copia de `after` conservando id y nombre
-(`app.py:1124-1126`), se pone `STATE.show_after = True` (`app.py:1127`) y se llama a
-`render_all()`, ya dentro de `finish_round` (`app.py:1145`). Cualquier excepción **al
-aplicar** se atrapa y se muestra con `notify` (`app.py:1128-1130`); las excepciones **del
-motor** ya no pasan por aquí: llegan como mensaje de tipo `error` (`app.py:1171`). Ambas
+(`app.py:1197-1199`), se pone `STATE.show_after = True` (`app.py:1200`) y se llama a
+`render_all()`, ya dentro de `finish_round` (`app.py:1219`). Cualquier excepción **al
+aplicar** se atrapa y se muestra con `notify` (`app.py:1201-1203`); las excepciones **del
+motor** ya no pasan por aquí: llegan como mensaje de tipo `error` (`app.py:1348`). Ambas
 rutas desembocan en `finish_round`, y eso es lo que garantiza que el botón se desbloquee.
 `notify` es un `window.alert` con fallback al diálogo propio
-(`app.py:117-121`).
+(`app.py:147-151`).
 
 `SimulationState` (`models.py:82-86`) guarda las dos fotos completas (`before`, `after`) más
 la lista de propagación. Eso es lo que hace posible el botón «Ver Antes / Ver Después»
-(`toggle_simulation`, `app.py:1184-1194`) sin volver a simular: sólo intercambia qué
+(`toggle_simulation`, `app.py:1361-1371`) sin volver a simular: sólo intercambia qué
 `GraphTab` está montado y, al volver a «después», reaplica la propagación sobre la copia
-(`app.py:1191`).
+(`app.py:1368`).
 
 ### 3.8 `render_all()` → `render_canvas()`, y qué se ve realmente en pantalla
 
-`render_all` (`app.py:532-536`) corre siempre en el mismo orden: `render_tabs`,
+`render_all` (`app.py:599-603`) corre siempre en el mismo orden: `render_tabs`,
 `render_controls`, `render_canvas`, `render_json`. No hay diffing ni framework: cada capa
-SVG se reconstruye entera asignando `innerHTML` (`app.py:270-271`, `app.py:284`) —
+SVG se reconstruye entera asignando `innerHTML` (`app.py:336-337`, `app.py:350`) —
 el porqué y sus consecuencias están en [03 — La capa de interfaz](03-interfaz.md).
 
-* `render_controls` (`app.py:494-529`) deshabilita «Simular» si no hay nodos
-  (`app.py:504`) y muestra el bloque de resultados si `STATE.simulation is not None`
-  (`app.py:515-522`).
-* `render_canvas` (`app.py:233-285`) construye cada arista con `edge_geometry`
+* `render_controls` (`app.py:560-596`) deshabilita «Simular» si no hay nodos
+  (`app.py:571`) y muestra el bloque de resultados si `STATE.simulation is not None`
+  (`app.py:582-589`).
+* `render_canvas` (`app.py:299-351`) construye cada arista con `edge_geometry`
   (`geometry.py:38`) —recta, curva si existe la arista inversa en un grafo dirigido
   (`has_reverse`, `geometry.py:88`), o bucle cúbico si es un self-loop
   (`geometry.py:44-57`)— y le pega el color y el grosor que devuelve `edge_style`
-  (`app.py:248`).
+  (`app.py:314`).
 * Cada nodo se pinta con `value_color` (`geometry.py:20-31`), que interpola linealmente
   entre `V0 = (110,124,242)` azul para el valor 0 y `V1 = (244,180,92)` naranja para el 1,
   recortando fuera de `[0,1]`, y elige texto claro u oscuro según la luminancia. Los
   valores de los nodos **sí** cambian de color visiblemente tras simular.
 
-Lo que `edge_style` (`app.py:221-230`) *pretende* pintar:
+Lo que `edge_style` (`app.py:287-296`) *pretende* pintar:
 
 | `highlight` | Significado | Color pedido | Grosor pedido | Clase que emite |
 |---|---|---|---|---|
@@ -503,7 +503,7 @@ Lo que `edge_style` (`app.py:221-230`) *pretende* pintar:
 | `None` | Reposo | `#6C6690` | 3 | — |
 
 **DEUDA CONOCIDA — ninguno de esos colores ni grosores llega a la pantalla.**
-`render_canvas` emite el path así (`app.py:253-254`):
+`render_canvas` emite el path así (`app.py:319-320`):
 
 ```python
 f'<path class="edge-path" d="{geometry["path"]}" fill="none" stroke="{color}" '
@@ -523,7 +523,7 @@ base del selector `.edge-path`, que fija `stroke: #6c6690` y `stroke-width: 3`. 
   que se anulan mutuamente.
 * Lo único que sí se ve tras simular es la **animación de guiones**: `edge_style` devuelve
   la clase `edge-animated`, que `render_canvas` sí pone en el `<g>` contenedor
-  (`app.py:251`), y el selector `.edge-animated .edge-path` aplica `stroke-dasharray` más
+  (`app.py:317`), y el selector `.edge-animated .edge-path` aplica `stroke-dasharray` más
   la animación `edge-flow`. En pantalla, entonces, la única distinción real es
   **disparó (guiones en movimiento) vs. no disparó (línea estática)**; `updated` y
   `delivered` se ven idénticas.
@@ -535,7 +535,7 @@ se ve sin cambiar ni un número — el arnés de equivalencia no lo notará, as�
 verificación de ese cambio es **visual, en el navegador**.
 
 **DEUDA CONOCIDA — texto obsoleto.** `render_controls` anuncia «aristas verdes =
-propagación» (`app.py:519`) cuando ni siquiera los colores que `edge_style` pide son
+propagación» (`app.py:586`) cuando ni siquiera los colores que `edge_style` pide son
 verdes. Tres textos en conflicto (el mensaje, `edge_style` y el CSS) describen tres cosas
 distintas, y la que gana es la tercera.
 
@@ -576,7 +576,7 @@ flowchart TD
     F1 --> G1["propagation_from_round, engine.py:118, con fv_updated<br/>node_0 a node_2: value_sent 1.0, updated False<br/>node_1 a node_2: value_sent 0.25, updated True"]
     F2 --> G2["propagation_from_round con amp_updated<br/>node_0 a node_2: value_sent 1.0, updated True<br/>node_1 a node_2: value_sent 0.25, updated True"]
 
-    G1 --> H1["apply_propagation, app.py:1039<br/>edge_0 highlight quiet<br/>edge_1 highlight delivered<br/>edge_2 highlight updated"]
+    G1 --> H1["apply_propagation, app.py:1106<br/>edge_0 highlight quiet<br/>edge_1 highlight delivered<br/>edge_2 highlight updated"]
     G2 --> H2["apply_propagation<br/>edge_0 highlight quiet<br/>edge_1 highlight updated<br/>edge_2 highlight updated"]
 
     H1 --> P1["en pantalla, hoy: ver 3.8<br/>edge_0 linea estatica<br/>edge_1 y edge_2 con guiones animados<br/>iguales entre si"]
@@ -604,21 +604,21 @@ JSON, no los colores.
 ```mermaid
 stateDiagram-v2
     [*] --> Editando
-    Editando --> Editando : "mark_graph_changed, app.py:193<br/>reasigna initial_graph en CADA cambio"
-    Editando --> MostrandoDespues : "simulate(), app.py:1055<br/>show_after = True"
-    MostrandoDespues --> MostrandoAntes : "toggle_simulation, app.py:1184<br/>monta simulation.before"
-    MostrandoAntes --> MostrandoDespues : "toggle_simulation<br/>reaplica apply_propagation, app.py:1191"
+    Editando --> Editando : "mark_graph_changed, app.py:259<br/>reasigna initial_graph en CADA cambio"
+    Editando --> MostrandoDespues : "simulate(), app.py:1122<br/>show_after = True"
+    MostrandoDespues --> MostrandoAntes : "toggle_simulation, app.py:1361<br/>monta simulation.before"
+    MostrandoAntes --> MostrandoDespues : "toggle_simulation<br/>reaplica apply_propagation, app.py:1368"
     MostrandoDespues --> MostrandoDespues : "simulate() otra vez = nueva ronda 1<br/>desde initial_graph, NO encadena"
     MostrandoAntes --> MostrandoDespues : "simulate() otra vez"
-    MostrandoDespues --> Editando : "reset_simulation, app.py:1197<br/>restaura initial_graph, simulation = None"
+    MostrandoDespues --> Editando : "reset_simulation, app.py:1374<br/>restaura initial_graph, simulation = None"
     MostrandoAntes --> Editando : "reset_simulation"
-    Editando --> [*] : "clear_graph_confirmed, app.py:938, o importar<br/>llaman a STATE.clear_simulation()"
+    Editando --> [*] : "clear_graph_confirmed, app.py:1005, o importar<br/>llaman a STATE.clear_simulation()"
 ```
 
 La transición reflexiva `Editando --> Editando` es la clave: mientras
 `STATE.simulation is None`, **cada** edición del grafo con nodos vuelve a fotografiar
 `initial_graph`. En cuanto hay una simulación en pantalla, esa reasignación se apaga
-(`app.py:194`) — y de ahí sale la trampa de la lista de abajo.
+(`app.py:260`) — y de ahí sale la trampa de la lista de abajo.
 
 ---
 
@@ -635,13 +635,13 @@ menos que un peso 1.0; los negativos nunca disparan. Se conserva porque es el po
 del backend (`engine.py:96-100`) y la línea base compara flotantes exactos.
 
 **DEUDA CONOCIDA — la importación de JSON no valida pesos.** El diálogo del editor exige
-`(0, 1]` (`app.py:813-815`); `finish_import` (`app.py:973-982`) no comprueba nada. Un
+`(0, 1]` (`app.py:880-882`); `finish_import` (`app.py:1040-1049`) no comprueba nada. Un
 archivo con pesos fuera de rango entra y produce las tasas raras del punto anterior.
 
 **DEUDA CONOCIDA — el diálogo de valor de nodo acepta `nan` e `inf`.**
-`node.value = float(value)` con `except ValueError` (`app.py:775-780`) deja pasar `nan`;
+`node.value = float(value)` con `except ValueError` (`app.py:842-847`) deja pasar `nan`;
 `json.loads` acepta el literal `NaN` al importar. El motor nunca genera un `NaN`, pero las
-ramas de `number_label` (`app.py:126-127`) y `value_color` (`geometry.py:23-24`) existen
+ramas de `number_label` (`app.py:156-157`) y `value_color` (`geometry.py:23-24`) existen
 porque el `NaN` sí puede entrar por ahí.
 
 **DECISIÓN DELIBERADA — self-loop en grafo no dirigido.** `np.triu` incluye la diagonal, así
@@ -662,24 +662,24 @@ Mover ese `raise` hacia abajo rompe la reproducibilidad con `np.random.seed()`.
 `fv_updated`, que se apoya en que `None == int` sea `False` (`algorithms.py:118-125`).
 
 **DECISIÓN DELIBERADA — repetir «Simular» no encadena rondas.** Siempre se parte de
-`STATE.initial_graph` (`app.py:1071`). Cada clic es una nueva ronda 1 con un sorteo
+`STATE.initial_graph` (`app.py:1138`). Cada clic es una nueva ronda 1 con un sorteo
 distinto. Para encadenar existe `run_simulation` (`engine.py:352`), que la UI del editor no
 expone.
 
 **DEUDA CONOCIDA — editar mientras hay un resultado en pantalla pierde la edición.** Con
 `STATE.simulation is not None`, `mark_graph_changed` no toca `initial_graph`
-(`app.py:194`). Mover un nodo o cambiar un valor actualiza la pestaña visible, pero el
+(`app.py:260`). Mover un nodo o cambiar un valor actualiza la pestaña visible, pero el
 siguiente clic en «Simular» —o en «Resetear»— vuelve al grafo inicial y descarta el cambio,
 sin avisar. Hay que presionar «Resetear» **antes** de editar.
 
 **DEUDA CONOCIDA — en grafos no dirigidos sólo se ve una de las dos direcciones.** El
 disparo es simétrico, así que `propagation` trae **dos** registros por arista
 (`node_0→node_1` y `node_1→node_0`), pero `apply_propagation` busca únicamente el par en el
-orden en que la arista fue dibujada (`app.py:1045`): el flag de la dirección inversa queda
+orden en que la arista fue dibujada (`app.py:1112`): el flag de la dirección inversa queda
 invisible.
 
 **DEUDA CONOCIDA — aristas paralelas comparten color.** `apply_propagation` usa `next(...)`
-sobre el primer match `(source, target)` (`app.py:1041-1048`), así que dos aristas dibujadas
+sobre el primer match `(source, target)` (`app.py:1108-1115`), así que dos aristas dibujadas
 entre el mismo par reciben el mismo `highlight`. (Que además la matriz sólo conserve el
 último peso es asunto de `get_adj`; ver [02 — El modelo de datos](02-modelo-de-datos.md).)
 
@@ -688,10 +688,10 @@ distinguen en pantalla y las reglas `.edge-path.is-*` están muertas. Explicaci�
 y camino de arreglo en §3.8.
 
 **DEUDA CONOCIDA — texto obsoleto en la UI.** «aristas verdes = propagación»
-(`app.py:519`).
+(`app.py:586`).
 
 **DECISIÓN DELIBERADA — la UI no usa `simulate_graph` ni `update_graph_data`.** Sólo
-`run_round` (`js/sweep-worker.js:78`). Consecuencia: la salvaguarda contra `NaN` de
+`run_round` (`js/sweep-worker.js:100`). Consecuencia: la salvaguarda contra `NaN` de
 `update_graph_data` (`engine.py:300-305`) no protege el camino del editor. Esas dos
 funciones existen para conservar el contrato del backend original y las ejercita el arnés.
 
@@ -706,6 +706,6 @@ celdas sin arista. Agregar un nodo aislado cambia toda la secuencia aleatoria po
 la misma semilla, lo que hace que dos corridas «equivalentes» dejen de coincidir.
 
 **DEUDA CONOCIDA — `apply_propagation` es cuadrático.** Un `next()` lineal sobre
-`propagation` por cada arista: `O(E × P)` (`app.py:1041-1048`). Irrelevante para los grafos
+`propagation` por cada arista: `O(E × P)` (`app.py:1108-1115`). Irrelevante para los grafos
 de decenas de nodos del editor, y es el primer punto a arreglar si alguien intenta abrir un
 grafo grande.

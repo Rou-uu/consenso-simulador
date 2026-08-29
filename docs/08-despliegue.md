@@ -213,11 +213,11 @@ La cadena completa, verificada contra el código:
 flowchart TB
     A["Se borra .nojekyll"] --> B["Jekyll excluye<br/>python/simulation/__init__.py"]
     B --> C["El sitio se publica.<br/>index.html, CSS y JS: 200 OK"]
-    C --> D["fetchPythonFile — bootstrap.js:31-42<br/>GET python/simulation/__init__.py"]
+    C --> D["fetchPythonFile — bootstrap.js:32-43<br/>GET python/simulation/__init__.py"]
     D --> E["HTTP 404"]
-    E --> F["response.ok === false<br/>bootstrap.js:34"]
+    E --> F["response.ok === false<br/>bootstrap.js:35"]
     F --> G["throw: 'No se pudo descargar<br/>python/simulation/__init__.py (404).'"]
-    G --> H["catch en bootstrap.js:84-88<br/>showRuntimeState('error', ...)"]
+    G --> H["catch en bootstrap.js:85-89<br/>showRuntimeState('error', ...)"]
     H --> I["El overlay se queda.<br/>El p sigue diciendo 'Cargando simulador…'<br/>y el small muestra el 404"]
 
     style C fill:#8a6d3b,color:#fff
@@ -233,7 +233,7 @@ porque el `<p>` de `index.html:13` nunca cambia de texto: el usuario ve
 
 Una precisión sobre el mensaje de error, porque circula la versión equivocada: el
 fallo **no** llega como `ModuleNotFoundError`. La guarda `response.ok` de
-`bootstrap.js:34` corta antes, en el `fetch`. `ModuleNotFoundError` sería el
+`bootstrap.js:35` corta antes, en el `fetch`. `ModuleNotFoundError` sería el
 síntoma solo si el archivo llegara a montarse vacío o corrupto — que es
 exactamente lo que pasa con un hosting que hace *fallback* tipo SPA (§7.2).
 
@@ -302,8 +302,8 @@ La tentación obvia es cambiar `path: .` por una lista blanca (`index.html`,
 `css/`, `js/`, `python/`). No se hizo, y el motivo es concreto:
 
 **los archivos que el navegador necesita están enumerados a mano, en dos listas
-distintas y desincronizables** (`PYTHON_FILES` en `js/bootstrap.js:4-14`, nueve
-archivos; `SWEEP_FILES` en `js/sweep-worker.js:4-11`, seis). Una lista blanca en
+distintas y desincronizables** (`PYTHON_FILES` en `js/bootstrap.js:4-15`, nueve
+archivos; `SWEEP_FILES` en `js/sweep-worker.js:4-12`, seis). Una lista blanca en
 el workflow sería una **tercera** lista manual de los mismos archivos. Olvidar
 una entrada en ella produce exactamente el fallo de §3 —sitio verde, aplicación
 muerta— y de nuevo sin ningún síntoma local. Publicar de más es un problema de
@@ -355,13 +355,13 @@ ajustes que dejan de ser opcionales:
    `<script>` para diferir su ejecución. `index.html` carga
    `<script type="module" src="./js/bootstrap.js">`, y `bootstrap.js` depende de
    `import.meta.url` para resolver las rutas de los `.py`
-   (`js/bootstrap.js:32`). Un módulo ES reinyectado por Rocket Loader pierde esa
+   (`js/bootstrap.js:33`). Un módulo ES reinyectado por Rocket Loader pierde esa
    semántica: o no ejecuta, o resuelve las rutas contra la base equivocada.
 3. **Auto Minify (JS): desactivado.** El minificador de Cloudflare es anterior a
    la sintaxis de módulos y puede corromper tanto `bootstrap.js` como
    `js/sweep-worker.js`. Este último es especialmente sensible: se instancia con
    `Worker.new("./js/sweep-worker.js", {"type": "module"})`
-   (`python/app.py:1256-1258`), y un Worker que falla al parsear **no** produce
+   (`python/app.py:1434-1436`), y un Worker que falla al parsear **no** produce
    un error legible en la página: el sweep simplemente no arranca.
 
 En resumen: proxear el dominio convierte un despliegue de cero configuración en
@@ -408,9 +408,9 @@ proyecto. Verificado archivo por archivo:
 |---|---|---|
 | `index.html:8` | `./css/app.css` | relativa al documento |
 | `index.html` (último `<script>`) | `./js/bootstrap.js` | relativa al documento |
-| `js/bootstrap.js:32` | `new URL('../' + sourcePath, import.meta.url)` | relativa **al módulo**, no al documento |
-| `js/sweep-worker.js:14` | `new URL('../' + sourcePath, import.meta.url)` | relativa al módulo del Worker |
-| `python/app.py:1256-1257` | `Worker.new("./js/sweep-worker.js", …)` | relativa al documento |
+| `js/bootstrap.js:33` | `new URL('../' + sourcePath, import.meta.url)` | relativa **al módulo**, no al documento |
+| `js/sweep-worker.js:15` | `new URL('../' + sourcePath, import.meta.url)` | relativa al módulo del Worker |
+| `python/app.py:1434-1435` | `Worker.new("./js/sweep-worker.js", …)` | relativa al documento |
 
 Las únicas URL absolutas del proyecto son las cuatro de jsDelivr
 (`js/bootstrap.js:1` y `:3`, `js/sweep-worker.js:1` y `:3`), que apuntan a un
@@ -474,7 +474,7 @@ veneno:
 GET /python/simulation/engine.py
   → 200 OK, cuerpo = <!doctype html>…
 
-fetchPythonFile: response.ok === true      ← la guarda de bootstrap.js:34 pasa
+fetchPythonFile: response.ok === true      ← la guarda de bootstrap.js:35 pasa
 mountPythonFiles: escribe HTML en /python/simulation/engine.py
 Pyodide: import simulation.engine
   → SyntaxError incomprensible dentro del traceback de Python
@@ -579,14 +579,14 @@ comer caché):
 6. Consola sin errores.
 
 El paso 5 no es opcional: es el único que prueba el segundo runtime, el
-`Worker.new` de `python/app.py:1256-1257`, y la lista `SWEEP_FILES`.
+`Worker.new` de `python/app.py:1434-1435`, y la lista `SWEEP_FILES`.
 
 ### 8.3 Síntoma → causa
 
 | Lo que ves | Causa probable | Dónde mirar |
 |---|---|---|
 | Overlay eterno; el `<small>` dice `No se pudo descargar python/simulation/__init__.py (404)` | Falta `.nojekyll`, o el archivo no está commiteado | §3 |
-| Overlay eterno; el `<small>` nombra otro `.py` | Ese archivo no se commiteó, o se renombró sin actualizar `PYTHON_FILES` | `js/bootstrap.js:4-14` |
+| Overlay eterno; el `<small>` nombra otro `.py` | Ese archivo no se commiteó, o se renombró sin actualizar `PYTHON_FILES` | `js/bootstrap.js:4-15` |
 | Página en blanco; consola con error de MIME estricto | El servidor no manda `.js` como JavaScript | §7.1 |
 | `SyntaxError` de Python en un `<!doctype html>` | El hosting hace fallback SPA en vez de 404 | §7.2 |
 | `ERR_TOO_MANY_REDIRECTS` | Cloudflare proxeado en modo *Flexible* | §5.2, punto 1 |
@@ -598,7 +598,7 @@ El paso 5 no es opcional: es el único que prueba el segundo runtime, el
 ### 8.4 Una rareza de caché que conviene conocer
 
 `fetchPythonFile` pide los `.py` con `{ cache: "no-store" }`
-(`js/bootstrap.js:33` y `js/sweep-worker.js:15`). Los `.py` esquivan la caché
+(`js/bootstrap.js:34` y `js/sweep-worker.js:16`). Los `.py` esquivan la caché
 HTTP; `index.html`, `css/app.css` y los propios `.js` **no**.
 
 Consecuencia práctica tras un despliegue: durante la ventana de caché de Pages

@@ -9,6 +9,7 @@ const PYTHON_FILES = [
   "python/simulation/registry.py",
   "python/simulation/rng.py",
   "python/simulation/algorithms.py",
+  "python/simulation/usuario.py",
   "python/simulation/engine.py",
   "python/simulation/sweep.py",
 ];

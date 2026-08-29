@@ -110,6 +110,16 @@ class AppState:
     node_counter: int = 0
     tab_counter: int = 1
     sweep_running: bool = False
+    # El worker avisa con un mensaje `listo` cuando termino de cargar Pyodide y
+    # NumPy. Hasta entonces una ronda pedida espera dentro del worker, y el boton
+    # lo dice en vez de fingir que ya esta calculando.
+    engine_ready: bool = False
+    # La ronda se calcula en el worker, asi que `simulate` termina antes de que
+    # llegue el resultado. Lo que antes era una variable local viviendo en la
+    # pila durante toda la llamada tiene que esperar aqui.
+    round_running: bool = False
+    round_before: GraphTab | None = None
+    round_tab_id: str | None = None
 
     @property
     def tab(self) -> GraphTab:

@@ -16,12 +16,14 @@ from pyodide.ffi import create_proxy, to_js
 from geometry import edge_geometry, fit_transform, has_reverse, node_center, value_color
 from models import AppState, Edge, GraphTab, Node, SimulationState
 from simulation import registry
-from simulation.engine import run_round
 
 
 STATE = AppState()
 PROXIES: list[Any] = []
+# Dos workers distintos a proposito: el del barrido se termina al cancelar
+# y ENGINE tiene que sobrevivir a eso para seguir atendiendo al editor.
 WORKER = None
+ENGINE = None
 DRAG: dict[str, Any] = {}
 CONNECTION: dict[str, Any] = {}
 PAN: dict[str, Any] = {}
@@ -499,7 +501,16 @@ def render_controls() -> None:
     )
     render_algorithm_options()
     render_algorithm_params()
-    by_id("simulate-btn").disabled = not bool(tab.nodes)
+    by_id("simulate-btn").disabled = not bool(tab.nodes) or STATE.round_running
+    if not STATE.round_running:
+        etiqueta = "Simular"
+    elif STATE.engine_ready:
+        etiqueta = "Simulando…"
+    else:
+        # La primera ronda espera a que el worker baje Pyodide y NumPy. Decirlo
+        # evita que una espera larga y normal parezca la aplicación colgada.
+        etiqueta = "Cargando motor…"
+    set_text("simulate-btn", etiqueta)
     by_id("sweep-run-btn").disabled = not bool(tab.nodes) or STATE.sweep_running
     set_hidden("simulation-results", STATE.simulation is None)
     if STATE.simulation is not None:
@@ -1042,31 +1053,132 @@ def apply_propagation(edges: list[Edge], propagation: list[dict[str, Any]]) -> N
 
 
 def simulate(*_args) -> None:
+    """Mitad que manda: prepara el grafo, bloquea el boton y suelta el mensaje.
+
+    Aqui termina la llamada. Lo que antes seguia despues de ``run_round`` vive
+    ahora en ``apply_round``, que corre cuando el worker contesta.
+    """
+
     if not STATE.tab.nodes:
         notify("No hay nodos para simular")
         return
-    try:
-        before = graph_snapshot(STATE.initial_graph or STATE.tab)
-        if STATE.initial_graph is None:
-            STATE.initial_graph = before.clone()
-        result = run_round(
-            before.graph_data(), algorithm=STATE.algorithm, params=algorithm_params()
+    if STATE.round_running:
+        return
+    if ENGINE is None:
+        notify("El motor de simulación no está disponible")
+        return
+
+    before = graph_snapshot(STATE.initial_graph or STATE.tab)
+    if STATE.initial_graph is None:
+        STATE.initial_graph = before.clone()
+    STATE.round_before = before
+    STATE.round_tab_id = STATE.tab.id
+    STATE.round_running = True
+    render_controls()
+    # Si el worker todavia esta cargando Pyodide, el mensaje espera ahi dentro:
+    # su manejador hace `await runtimePromise` antes de atender nada.
+    ENGINE.postMessage(
+        to_js(
+            {
+                "type": "ronda",
+                "params": {
+                    "graph": before.graph_data(),
+                    "algorithm": STATE.algorithm,
+                    "algorithmParams": algorithm_params(),
+                },
+            },
+            dict_converter=Object.fromEntries,
         )
+    )
+
+
+def apply_round(result: dict[str, Any]) -> None:
+    """Mitad que recibe: aplica el resultado al snapshot que quedo esperando."""
+
+    before = STATE.round_before
+    if before is None:
+        finish_round()
+        return
+    try:
+        # La pestaña pudo cambiar mientras la ronda estaba en vuelo: hoy el
+        # boton queda bloqueado, pero cambiar de pestaña no lo esta, y aplicar
+        # el resultado sobre otra pestaña la corrompe en silencio.
+        index = next(
+            (
+                position
+                for position, tab in enumerate(STATE.tabs)
+                if tab.id == STATE.round_tab_id
+            ),
+            None,
+        )
+        if index is None:
+            return
+        target = STATE.tabs[index]
         values = list(result["values"])
         after = before.clone()
-        for index, node in enumerate(after.nodes):
-            node.value = values[index]
+        for position, node in enumerate(after.nodes):
+            node.value = values[position]
         propagation = [dict(item) for item in result.get("propagation", [])]
         apply_propagation(after.edges, propagation)
         STATE.simulation = SimulationState(before, after, propagation)
         replacement = after.clone()
-        replacement.id, replacement.name = STATE.tab.id, STATE.tab.name
-        STATE.tabs[STATE.tabs.index(STATE.tab)] = replacement
+        replacement.id, replacement.name = target.id, target.name
+        STATE.tabs[index] = replacement
         STATE.show_after = True
-        render_all()
     except Exception as error:
-        notify(f"Error al ejecutar la simulación: {error}")
+        notify(f"Error al aplicar la simulación: {error}")
         window.console.error(error)
+    finally:
+        finish_round()
+
+
+def finish_round() -> None:
+    """Embudo: toda salida de la ronda pasa por aqui y desbloquea el boton.
+
+    Va atado a «la ronda terminó», no a «se dibujó el canvas»: el error del
+    worker no repinta nada y aun asi tiene que devolver el control.
+    """
+
+    STATE.round_running = False
+    STATE.round_before = None
+    STATE.round_tab_id = None
+    render_all()
+
+
+def start_engine_worker() -> None:
+    """Levanta el worker de rondas al cargar la pagina.
+
+    Arrancarlo aqui y no en el primer clic evita que la primera simulacion
+    espere a que Pyodide y NumPy carguen en un segundo runtime. Si alguien pica
+    Simular antes de que termine de cargar, el mensaje espera dentro del worker:
+    su manejador hace ``await`` sobre el runtime antes de atender nada.
+    """
+
+    global ENGINE
+    ENGINE = Worker.new(
+        "./js/sweep-worker.js",
+        to_js({"type": "module"}, dict_converter=Object.fromEntries),
+    )
+
+    def on_message(event):
+        data = event.data.to_py() if hasattr(event.data, "to_py") else event.data
+        message = dict(data)
+        kind = str(message.get("type", ""))
+        if kind == "listo":
+            STATE.engine_ready = True
+            render_controls()
+        elif kind == "ronda":
+            apply_round(json.loads(str(message.get("resultado") or "{}")))
+        elif kind == "error":
+            notify(f"Error al ejecutar la simulación: {message.get('message')}")
+            finish_round()
+
+    def on_error(event):
+        notify(f"Error en el motor de simulación: {event.message}")
+        finish_round()
+
+    ENGINE.addEventListener("message", retain(on_message))
+    ENGINE.addEventListener("error", retain(on_error))
 
 
 def toggle_simulation(*_args) -> None:
@@ -1232,6 +1344,7 @@ def bind_events() -> None:
 
 def main() -> None:
     bind_events()
+    start_engine_worker()
     render_all()
     fit_view()
     window.graphSimulatorReady = True

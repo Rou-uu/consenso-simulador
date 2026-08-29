@@ -9,7 +9,8 @@ navegador, la parte de la interfaz que se genera desde el registro:
 * los campos de parámetros salen de la declaración de cada algoritmo,
 * editar un campo actualiza el estado y llega a ``algorithm_params()``,
 * cambiar de algoritmo conserva lo que se había escrito en el anterior,
-* un algoritmo recién registrado aparece solo, sin tocar la interfaz.
+* un algoritmo recién registrado aparece solo, sin tocar la interfaz,
+* la ronda del editor va y vuelve por el worker sin dejar el botón trabado.
 
 No sustituye al recorrido visual en navegador: no valida estilos, ni eventos
 reales, ni el arranque de Pyodide.
@@ -75,6 +76,14 @@ class FakeElement:
     def select(self):
         pass
 
+    def getBoundingClientRect(self):
+        # Medidas fijas: el canvas no existe, pero `render_canvas` mide para
+        # encuadrar el minimapa y necesita numeros con los que dividir.
+        return types.SimpleNamespace(
+            left=0.0, top=0.0, right=800.0, bottom=600.0,
+            width=800.0, height=600.0, x=0.0, y=0.0,
+        )
+
 
 class FakeDocument:
     def __init__(self) -> None:
@@ -91,6 +100,63 @@ class FakeDocument:
         return None
 
 
+class FakeWorker:
+    """Worker de mentira que corre el motor de verdad y contesta cuando se le pide.
+
+    La ronda del editor viaja al worker, asi que ``simulate`` termina antes de
+    que exista el resultado. Separar el envio de la respuesta es justo lo que
+    permite comprobar el estado intermedio: boton bloqueado, ronda en vuelo.
+    """
+
+    ultimo: "FakeWorker | None" = None
+
+    def __init__(self, _url, _options=None) -> None:
+        self.oyentes: dict[str, list] = {}
+        self.enviados: list[dict] = []
+        FakeWorker.ultimo = self
+
+    @classmethod
+    def new(cls, url, options=None) -> "FakeWorker":
+        return cls(url, options)
+
+    def addEventListener(self, nombre, callback) -> None:
+        self.oyentes.setdefault(nombre, []).append(callback)
+
+    def postMessage(self, mensaje) -> None:
+        self.enviados.append(mensaje)
+
+    def terminate(self) -> None:
+        pass
+
+    def _entregar(self, data) -> None:
+        for callback in self.oyentes.get("message", []):
+            callback(types.SimpleNamespace(data=data))
+
+    def anunciar_listo(self) -> None:
+        """Lo que hace el worker real al terminar de cargar Pyodide y NumPy."""
+
+        self._entregar({"type": "listo"})
+
+    def responder(self) -> None:
+        """Ejecuta el motor con el ultimo mensaje y devuelve el resultado."""
+
+        import json as _json
+
+        from simulation.engine import run_round
+
+        params = self.enviados.pop()["params"]
+        resultado = run_round(
+            params["graph"],
+            algorithm=params.get("algorithm", "fv"),
+            params=params.get("algorithmParams") or {},
+        )
+        self._entregar({"type": "ronda", "resultado": _json.dumps(resultado)})
+
+    def fallar(self, mensaje: str = "algo tronó") -> None:
+        self.enviados.pop()
+        self._entregar({"type": "error", "message": mensaje})
+
+
 def instalar_dobles() -> FakeDocument:
     documento = FakeDocument()
     js = types.ModuleType("js")
@@ -102,7 +168,10 @@ def instalar_dobles() -> FakeDocument:
         performance=types.SimpleNamespace(now=lambda: 0.0),
         setTimeout=lambda *_a: None,
     )
-    js.Blob = js.Object = js.URL = js.Worker = types.SimpleNamespace()
+    js.Blob = js.URL = types.SimpleNamespace()
+    # `to_js` es la identidad aquí, pero app.py sí evalúa `Object.fromEntries`.
+    js.Object = types.SimpleNamespace(fromEntries=lambda pares: dict(pares))
+    js.Worker = FakeWorker
     ffi = types.ModuleType("pyodide.ffi")
     ffi.create_proxy = lambda fn: fn
     ffi.to_js = lambda obj, **_k: obj
@@ -115,6 +184,7 @@ def instalar_dobles() -> FakeDocument:
 DOCUMENTO = instalar_dobles()
 
 import app  # noqa: E402  (requiere los dobles ya instalados)
+from models import Edge, Node  # noqa: E402
 from simulation import registry  # noqa: E402
 
 
@@ -285,6 +355,50 @@ comprobar(
     mediana < 0.20,
     f"aire desperdiciado razonable: mediana {mediana*100:.0f}% (con 4 divisiones fijas era 42%)",
 )
+
+print("\n7. La ronda va y viene por el worker")
+app.start_engine_worker()
+worker = FakeWorker.ultimo
+app.STATE.tab.nodes = [Node("node_0", 0, 0.0, 0.0), Node("node_1", 1, 100.0, 0.0)]
+app.STATE.tab.edges = [Edge("edge_0", "node_1", "node_0", "1")]
+cambiar_algoritmo("fv")
+
+app.simulate()
+boton = DOCUMENTO.getElementById("simulate-btn")
+comprobar(app.STATE.round_running, "al mandar, la ronda queda en vuelo")
+comprobar(
+    boton.disabled and boton.textContent == "Cargando motor…",
+    "antes del aviso `listo`, el botón dice que está cargando, no simulando",
+)
+worker.anunciar_listo()
+comprobar(boton.textContent == "Simulando…", "tras el aviso, el botón se bloquea simulando")
+comprobar(len(worker.enviados) == 1, "salió exactamente un mensaje al worker")
+comprobar(
+    worker.enviados[0]["params"]["graph"]["nodes"][1]["value"] == 1,
+    "el mensaje lleva el grafo, no una referencia al estado",
+)
+
+app.simulate()
+comprobar(len(worker.enviados) == 1, "un segundo clic en vuelo no manda otro mensaje")
+
+worker.responder()
+valores = [nodo.value for nodo in app.STATE.tab.nodes]
+comprobar(valores == [1, 1], f"al contestar, node_0 copia el 1 del vecino: {valores}")
+comprobar(not app.STATE.round_running, "la ronda deja de estar en vuelo")
+comprobar(not boton.disabled and boton.textContent == "Simular", "el botón se desbloquea")
+comprobar(app.STATE.simulation is not None, "queda el resultado para «Ver Antes»")
+
+# El embudo va atado a «la ronda terminó», no a «se repintó el canvas»: un error
+# del worker no dibuja nada y aun así tiene que devolver el control.
+app.reset_simulation()
+app.simulate()
+comprobar(boton.disabled, "vuelve a bloquearse en la siguiente ronda")
+worker.fallar("el algoritmo tronó")
+comprobar(
+    not app.STATE.round_running and not boton.disabled,
+    "un error del worker también desbloquea el botón",
+)
+comprobar(app.STATE.round_before is None, "el embudo suelta el snapshot que esperaba")
 
 print()
 if FALLAS:

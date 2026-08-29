@@ -33,7 +33,7 @@ de la sección 8 explica cómo; el arnés en sí lo cubre
 
 > **DEUDA CONOCIDA — la promesa «la interfaz aparece sola» tiene un borde.**
 > `render_algorithm_options` ofrece **todos** los algoritmos registrados, sin
-> filtrar por si tienen `batch` (`app.py:151-154`). Un algoritmo solo escalar es
+> filtrar por si tienen `batch` (`app.py:153-156`). Un algoritmo solo escalar es
 > seleccionable en el desplegable, funciona en el editor y muere al pulsar el
 > barrido, con el `ValueError` de `registry.py:99-102`. El mensaje está escrito
 > para explicar exactamente eso, pero la interfaz no lo previene.
@@ -63,7 +63,7 @@ flowchart TD
     RNG["rng.py<br/>HOJA: typing y NumPy"]:::hoja
 
     APP -->|"app.py:18 — from simulation import registry"| REG
-    APP -->|"app.py:19 — from simulation.engine import run_round"| ENG
+    APP -->|"postMessage ronda — el worker llama a run_round"| ENG
     INIT -->|"__init__.py:16 — from . import algorithms"| ALG
     INIT -->|"__init__.py:26"| ENG
     INIT -->|"__init__.py:41"| SWP
@@ -141,7 +141,7 @@ por omisión de argumentos, en ocho sitios:
 | `sweep.py:313` | valor por omisión de `iter_sweep` |
 | `sweep.py:418` | valor por omisión de `async_iter_sweep` |
 | `sweep.py:456` | valor por omisión de `run_sweep` |
-| `js/sweep-worker.js:88` | `_params.get("algorithm", "fv")` al armar la llamada dentro del Worker |
+| `js/sweep-worker.js:109` | `_params.get("algorithm", "fv")` al armar la llamada dentro del Worker |
 
 Aparte de esos ocho, `sweep.py:148` nombra a `'fv'` y `'amp'` **dentro del texto
 de un mensaje de error** (`"algorithm debe ser 'fv', 'amp' o una funcion batched"`),
@@ -149,7 +149,7 @@ no en un despacho: el código de esa rama acepta cualquier callable.
 
 > **INVARIANTE — la clave `"fv"` no se renombra ni se elimina.** Agregar
 > algoritmos es libre. Quitar `"fv"` hace que `algorithm_params()` llame a
-> `registry.get("fv")` al primer render (`app.py:142`) y la aplicación no
+> `registry.get("fv")` al primer render (`app.py:144`) y la aplicación no
 > levante.
 
 > **DECISION DELIBERADA — `engine.py:28` y `sweep.py:27` importan nombres
@@ -194,9 +194,9 @@ modifica.
 
 | Campo | Tipo | Para qué sirve | Detalle no obvio |
 |---|---|---|---|
-| `name` | `str` | Clave dentro del dict `params` que reciben las tres piezas, y valor del atributo `data-param` del `<input>` | Es lo que lees con `params.get("mi_param")`. Debe ser un identificador seguro en HTML: se usa como `id="param-{name}"` (`app.py:176-177`). |
-| `label` | `str` | Texto de la etiqueta visible | **Se inserta como HTML crudo, sin escapar** (`app.py:176`), a propósito, para poder escribir `<code>agreed</code>`. Ver trampa 4. |
-| `default` | `Any` | Valor inicial del campo y del dict de parámetros | Lo cosecha `AlgorithmSpec.defaults()` (`registry.py:54-57`) y lo consume `app.algorithm_params()` (`app.py:143-145`). |
+| `name` | `str` | Clave dentro del dict `params` que reciben las tres piezas, y valor del atributo `data-param` del `<input>` | Es lo que lees con `params.get("mi_param")`. Debe ser un identificador seguro en HTML: se usa como `id="param-{name}"` (`app.py:178-179`). |
+| `label` | `str` | Texto de la etiqueta visible | **Se inserta como HTML crudo, sin escapar** (`app.py:178`), a propósito, para poder escribir `<code>agreed</code>`. Ver trampa 4. |
+| `default` | `Any` | Valor inicial del campo y del dict de parámetros | Lo cosecha `AlgorithmSpec.defaults()` (`registry.py:54-57`) y lo consume `app.algorithm_params()` (`app.py:145-147`). |
 | `step` | `str` | Atributo `step` del `<input type="number">` | Por omisión `"any"` (`registry.py:40`). Pon `"0.01"` o `"1"` si quieres granularidad fija en las flechitas del campo. |
 
 ### 2.2 `AlgorithmSpec` — `registry.py:43-57`
@@ -204,7 +204,7 @@ modifica.
 | Campo | Tipo | Obligatorio | Para qué sirve |
 |---|---|---|---|
 | `key` | `str` | Sí | Identificador estable. Viaja en el JSON del `<option value>`, en `STATE.algorithm`, en el mensaje al Worker y en el campo `algorithm` de cada resultado. **Cambiarlo rompe grafos y baselines guardados.** |
-| `label` | `str` | Sí | Texto del `<option>`. **Sí se escapa** con `html.escape` (`app.py:152`), a diferencia de `ParamSpec.label`. |
+| `label` | `str` | Sí | Texto del `<option>`. **Sí se escapa** con `html.escape` (`app.py:154`), a diferencia de `ParamSpec.label`. |
 | `scalar` | `Callable` | Sí | Una ronda nodo por nodo, para el editor. |
 | `updated` | `Callable` | Sí | Predicado de visualización. |
 | `batch` | `Callable \| None` | No — default `None` (`registry.py:51`) | Versión vectorizada, para el barrido. |
@@ -312,18 +312,18 @@ def updated(messages, updates, old_values, target_index, source_index, params=No
 que disparó (`engine.py:150-152`) y arma el registro
 `{"source", "target", "value_sent", "updated_value"}` (`engine.py:154-161`). Después,
 `app.apply_propagation` traduce eso a tres estados de arista: `updated`, `delivered`
-y `quiet` (`app.py:1028-1042`).
+y `quiet` (`app.py:1039-1053`).
 
 > **DEUDA CONOCIDA — esos tres estados hoy no se distinguen en pantalla.**
 > `render_canvas` escribe el color como **atributo de presentación**
-> (`stroke="{color}"`, `app.py:251-252`) y en CSS cualquier regla vence a un
+> (`stroke="{color}"`, `app.py:253-254`) y en CSS cualquier regla vence a un
 > atributo de presentación. Como existe la regla `.edge-path` con
 > `stroke: #6c6690; stroke-width: 3`, **todas** las aristas se pintan igual. Las
 > reglas `.edge-path.is-updated`, `.is-delivered`, `.is-idle` y `.is-selected`
 > existen en el CSS pero están muertas: `render_canvas` nunca emite esas clases.
 > Lo único que sí se ve tras simular es la animación punteada, que llega por
 > `.edge-animated .edge-path` porque la clase `edge-animated` sí se emite en el
-> `<g>` (`app.py:249`). Verificado también contra el respaldo previo al refactor:
+> `<g>` (`app.py:251`). Verificado también contra el respaldo previo al refactor:
 > es idéntico, **no es una regresión de este proyecto**. Escribe tu `updated`
 > igual: el dato es correcto y sale bien en el JSON, solo que el pixel todavía no
 > lo refleja. Detalle completo en [03](03-interfaz.md).
@@ -351,8 +351,8 @@ sequenceDiagram
     participant PROP as engine.propagation_from_round
     participant SWP as sweep.round_batch
 
-    Note over UI,PROP: EDITOR — botón «Simular» · app.py:1044
-    UI->>ENG: run_round graph, algorithm, params=algorithm_params · app.py:1052-1054
+    Note over UI,PROP: EDITOR — botón «Simular» · app.py:1055
+    UI->>ENG: postMessage ronda → el worker llama run_round · app.py:1080-1092
     ENG->>ENG: who_gets_message → messages target,source · engine.py:254
     ENG->>REG: registry.get algorithm .scalar · engine.py:257
     REG-->>ENG: función scalar
@@ -439,9 +439,9 @@ inofensivo.
 peso, y no es teórica: el proyecto ya registra algoritmos en caliente en dos
 scripts.
 
-- `scripts/smoke_ui.py:212-224` registra un algoritmo `zz` con dos parámetros
+- `scripts/smoke_ui.py:277-289` registra un algoritmo `zz` con dos parámetros
   **después** de haber importado `app.py`, y la comprobación de
-  `smoke_ui.py:161-164` exige que las opciones del selector sean exactamente
+  `smoke_ui.py:226-229` exige que las opciones del selector sean exactamente
   `list(registry.KEYS)`. Con una `KEYS` congelada al importar, esa aserción
   falla. Es la demostración ejecutable del diseño completo.
 - Las guardas `algorithm not in ALGORITHMS` de `engine.py:137`, `engine.py:224`,
@@ -488,27 +488,27 @@ solo se le agregan claves.
 ```mermaid
 flowchart LR
     A["ParamSpec.default<br/>algorithms.py:216-220"] --> B["AlgorithmSpec.defaults<br/>registry.py:54"]
-    B --> C["app.algorithm_params<br/>app.py:136"]
+    B --> C["app.algorithm_params<br/>app.py:138"]
     C --> D["STATE.algorithm_params<br/>models.py:98"]
-    C --> E["engine.run_round params=...<br/>app.py:1052-1054"]
-    C --> F["mensaje algorithmParams<br/>app.py:1134"]
+    C --> E["mensaje ronda → run_round params=...<br/>app.py:1080-1092"]
+    C --> F["mensaje algorithmParams<br/>app.py:1246"]
     E --> G["scalar / updated<br/>engine.py:258, engine.py:150"]
-    F --> H["postMessage → JSON<br/>sweep-worker.js:76"]
-    H --> I["iter_sweep params=...<br/>sweep-worker.js:89"]
+    F --> H["postMessage → JSON<br/>sweep-worker.js:97"]
+    H --> I["iter_sweep params=...<br/>sweep-worker.js:110"]
     I --> J["round_batch → batch<br/>sweep.py:168-173"]
 ```
 
 Dos detalles de esa cadena que hay que conocer:
 
-> **DECISION DELIBERADA — `app.py:1129-1134` renombra la clave a
-> `algorithmParams`.** El comentario de `app.py:1132-1133` lo explica: el mensaje
+> **DECISION DELIBERADA — `app.py:1241-1246` renombra la clave a
+> `algorithmParams`.** El comentario de `app.py:1244-1245` lo explica: el mensaje
 > al Worker ya tiene una clave `params` que son los parámetros *del barrido*
 > (`numPPoints`, `iterations`, …). Sin el renombrado serían dos cosas distintas
 > con el mismo nombre.
 
 > **INVARIANTE — todo valor de `params` debe ser serializable a JSON.** Cruza un
-> `JSON.stringify` / `json.loads` en el camino al Worker (`sweep-worker.js:76` y
-> `sweep-worker.js:85`). Con `float` no hay problema; con un objeto NumPy o una
+> `JSON.stringify` / `json.loads` en el camino al Worker (`sweep-worker.js:97` y
+> `sweep-worker.js:106`). Con `float` no hay problema; con un objeto NumPy o una
 > función, el barrido explota y el editor no.
 
 ---
@@ -529,49 +529,49 @@ Un `<select>` sin `<option>` y un `<div>` vacío y oculto. Todo lo demás se gen
 
 ```mermaid
 flowchart TD
-    RC["render_controls<br/>app.py:492"] --> RO["render_algorithm_options<br/>app.py:149"]
-    RC --> RP["render_algorithm_params<br/>app.py:161"]
+    RC["render_controls<br/>app.py:494"] --> RO["render_algorithm_options<br/>app.py:151"]
+    RC --> RP["render_algorithm_params<br/>app.py:163"]
 
     RO --> S1["registry.specs · registry.py:106"]
-    S1 --> S2["por cada spec:<br/>&lt;option value=key&gt;label&lt;/option&gt;<br/>ambos con html.escape · app.py:152"]
-    S2 --> S3{"innerHTML cambió?<br/>app.py:156"}
+    S1 --> S2["por cada spec:<br/>&lt;option value=key&gt;label&lt;/option&gt;<br/>ambos con html.escape · app.py:154"]
+    S2 --> S3{"innerHTML cambió?<br/>app.py:158"}
     S3 -->|no| S4["no se reescribe el DOM del select"]
-    S3 -->|sí| S5["select.innerHTML = opciones<br/>app.py:157"]
-    S4 --> S6["select.value = STATE.algorithm · app.py:158<br/>SIEMPRE: está fuera del if"]
+    S3 -->|sí| S5["select.innerHTML = opciones<br/>app.py:159"]
+    S4 --> S6["select.value = STATE.algorithm · app.py:160<br/>SIEMPRE: está fuera del if"]
     S5 --> S6
 
-    RP --> P1{"data-algorithm ==<br/>STATE.algorithm?<br/>app.py:170"}
+    RP --> P1{"data-algorithm ==<br/>STATE.algorithm?<br/>app.py:172"}
     P1 -->|sí| P2["return inmediato:<br/>NO pisa lo que se está escribiendo<br/>ni roba el foco"]
-    P1 -->|no| P3["registry.get STATE.algorithm · app.py:173"]
-    P3 --> P4["por cada ParamSpec:<br/>&lt;label&gt; con param.label SIN escapar<br/>+ &lt;input type=number step=param.step<br/>data-param=param.name&gt;<br/>app.py:175-181"]
-    P4 --> P5["contenedor.hidden = not spec.params<br/>app.py:184"]
+    P1 -->|no| P3["registry.get STATE.algorithm · app.py:175"]
+    P3 --> P4["por cada ParamSpec:<br/>&lt;label&gt; con param.label SIN escapar<br/>+ &lt;input type=number step=param.step<br/>data-param=param.name&gt;<br/>app.py:177-183"]
+    P4 --> P5["contenedor.hidden = not spec.params<br/>app.py:186"]
 
-    E1["evento change/input en el CONTENEDOR<br/>app.py:1214-1215"] --> E2["on_param_change · app.py:1011"]
-    E2 --> E3["lee data-param del target<br/>app.py:1017"]
-    E3 --> E4["float valor; si falla, return<br/>app.py:1020-1023"]
-    E4 --> E5["STATE.algorithm_params[algoritmo][name] = valor<br/>app.py:1024-1025"]
+    E1["evento change/input en el CONTENEDOR<br/>app.py:1326-1327"] --> E2["on_param_change · app.py:1022"]
+    E2 --> E3["lee data-param del target<br/>app.py:1028"]
+    E3 --> E4["float valor; si falla, return<br/>app.py:1031-1034"]
+    E4 --> E5["STATE.algorithm_params[algoritmo][name] = valor<br/>app.py:1035-1036"]
 ```
 
 Tres decisiones no obvias en ese flujo:
 
 1. **DECISION DELIBERADA — el listener está en el contenedor, no en cada campo**
-   (`app.py:1214-1215`). Es delegación de eventos: los `<input>` se destruyen y se
+   (`app.py:1326-1327`). Es delegación de eventos: los `<input>` se destruyen y se
    recrean al cambiar de algoritmo, así que un listener por campo se perdería. El
-   docstring de `on_param_change` (`app.py:1014-1015`) lo documenta.
-2. **DECISION DELIBERADA — la guarda `data-algorithm`** (`app.py:170`).
+   docstring de `on_param_change` (`app.py:1025-1026`) lo documenta.
+2. **DECISION DELIBERADA — la guarda `data-algorithm`** (`app.py:172`).
    `render_controls` corre en cada render. Sin la guarda, escribir «0.» en un
    campo reconstruiría el HTML, borraría el «0.» a medio escribir y le quitaría el
    foco al cursor.
 3. **INVARIANTE — `algorithm_params()` rellena huecos con dos `setdefault`**
-   (`app.py:143-145`). El primero crea el dict del algoritmo la primera vez; el
+   (`app.py:145-147`). El primero crea el dict del algoritmo la primera vez; el
    segundo agrega claves que falten. El segundo importa cuando **agregas un
    `ParamSpec` a un algoritmo que ya existía**: el dict guardado en `STATE` de una
    sesión previa no tiene esa clave y `render_algorithm_params` haría `KeyError`
-   en `valores[param.name]` (`app.py:178`).
+   en `valores[param.name]` (`app.py:180`).
 
 Y una consecuencia agradable: `STATE.algorithm_params` está indexado **por
 algoritmo** (`models.py:95-98`), así que cambiar a otro algoritmo y volver conserva
-lo que habías escrito. `smoke_ui.py:199-209` lo verifica.
+lo que habías escrito. `smoke_ui.py:264-274` lo verifica.
 
 ---
 
@@ -587,9 +587,9 @@ flowchart TD
 
     M1 --> W["excepción sube por iter_sweep<br/>runPythonAsync la convierte en JS Error"]
     M2 --> W
-    W --> CLEAN["mensajeLegible · sweep-worker.js:55-67<br/>tira el traceback, deja la última línea<br/>y quita el prefijo 'ValueError: '"]
-    CLEAN --> POST["postMessage type=error · sweep-worker.js:100"]
-    POST --> UI["app.py:1163-1164<br/>&lt;p class=sweep-error&gt;Error: …&lt;/p&gt;"]
+    W --> CLEAN["mensajeLegible · sweep-worker.js:58-70<br/>tira el traceback, deja la última línea<br/>y quita el prefijo 'ValueError: '"]
+    CLEAN --> POST["postMessage type=error · sweep-worker.js:134"]
+    POST --> UI["app.py:1275-1276<br/>&lt;p class=sweep-error&gt;Error: …&lt;/p&gt;"]
 ```
 
 ### Por qué dos mensajes y no uno
@@ -833,7 +833,7 @@ En el navegador, la lista de verificación mínima:
 | Qué mirar | Qué debe pasar | De dónde sale |
 |---|---|---|
 | El desplegable | Aparece «Máximo recibido (MAX)» en tercer lugar | `registry.specs()` en orden de registro |
-| Al seleccionarlo | Aparece un campo «Mejora mínima para adoptar `umbral`» con `0.0` y el `<code>` renderizado | `ParamSpec` → `app.py:175-181` |
+| Al seleccionarlo | Aparece un campo «Mejora mínima para adoptar `umbral`» con `0.0` y el `<code>` renderizado | `ParamSpec` → `app.py:177-183` |
 | «Simular» | Los nodos suben al máximo de sus vecinos, y las aristas que transmitieron arrancan la animación punteada | `maximo` + `maximo_updated` |
 | Vista Análisis → barrido | Corre y dibuja la curva | `maximo_batch` |
 | Con `batch=None` | El barrido falla con *«no tiene version vectorizada … Funciona en el editor»* y el editor sigue funcionando | `registry.py:99-102` |
@@ -933,7 +933,7 @@ Los puntos B4, B11 y B13 son los más caros y los que el registro elimina de ra�
   `PROPAGATION_PREDICATES[algorithm]` una sola vez, fuera del bucle (`engine.py:142`).
 - **B11** — la interfaz decidía por nombre qué campo mostrar
   (`algorithm === 'amp' && ...`). Aquí, `render_algorithm_params` no conoce ningún
-  nombre: itera `spec.params` (`app.py:175-181`).
+  nombre: itera `spec.params` (`app.py:177-183`).
 - **B13** — `agreed` era un parámetro con nombre en las firmas del motor batched
   (`vals = algoritmo(vals, fired, agreed)`, `Simulador/back/api.py:189`). Un
   algoritmo con un parámetro distinto forzaba a rediseñar esa firma o a arrastrar
@@ -962,9 +962,9 @@ Los puntos B4, B11 y B13 son los más caros y los que el registro elimina de ra�
    script que registre algo, copia esa guarda.
 
 4. **DECISION DELIBERADA — `ParamSpec.label` se inserta SIN escapar;
-   `AlgorithmSpec.label` SÍ se escapa.** Compara `app.py:176` (label crudo, para
-   poder usar `<code>`) con `app.py:152` (`html.escape` sobre `spec.label`). El
-   docstring de `render_algorithm_params` (`app.py:166-167`) justifica la
+   `AlgorithmSpec.label` SÍ se escapa.** Compara `app.py:178` (label crudo, para
+   poder usar `<code>`) con `app.py:154` (`html.escape` sobre `spec.label`). El
+   docstring de `render_algorithm_params` (`app.py:168-169`) justifica la
    asimetría: las etiquetas vienen de `algorithms.py`, que es código del proyecto.
    Consecuencia doble: (a) un `<code>` en el label del **algoritmo** se ve
    literal, no formateado; (b) el label de un **parámetro** es HTML ejecutable —
@@ -973,10 +973,10 @@ Los puntos B4, B11 y B13 son los más caros y los que el registro elimina de ra�
 5. **DEUDA CONOCIDA — todos los parámetros son `<input type="number">` y llegan
    como `float`.** No hay forma declarativa de pedir un booleano, un desplegable,
    un entero o un texto: `render_algorithm_params` genera siempre un campo
-   numérico (`app.py:177`) y `on_param_change` hace `float(...)` sin excepción
-   (`app.py:1021`). Un parámetro «entero» te llegará como `3.0`; conviértelo tú
+   numérico (`app.py:179`) y `on_param_change` hace `float(...)` sin excepción
+   (`app.py:1032`). Un parámetro «entero» te llegará como `3.0`; conviértelo tú
    con `int(...)` dentro de tu algoritmo. Y un valor no numérico se descarta **en
-   silencio** (`app.py:1022-1023`): el campo muestra basura y el motor sigue con
+   silencio** (`app.py:1033-1034`): el campo muestra basura y el motor sigue con
    el valor previo.
 
 6. **INVARIANTE — no pases `updated=None`.** El dataclass lo acepta —el campo no
@@ -1011,7 +1011,7 @@ Los puntos B4, B11 y B13 son los más caros y los que el registro elimina de ra�
 10. **INVARIANTE — la clave `"fv"` está cableada como valor por omisión** en los
     ocho sitios de la tabla de la sección 1.2. Agregar algoritmos es libre;
     **eliminar o renombrar `"fv"` no lo es**: `algorithm_params()` haría
-    `registry.get("fv")` al arrancar (`app.py:142`) y la aplicación no
+    `registry.get("fv")` al arrancar (`app.py:144`) y la aplicación no
     levantaría.
 
 11. **DECISION DELIBERADA — el orden del desplegable es el orden de los
@@ -1020,8 +1020,8 @@ Los puntos B4, B11 y B13 son los más caros y los que el registro elimina de ra�
     que tu algoritmo salga primero, mueve su bloque `register` arriba de los otros
     dentro de `algorithms.py`.
 
-12. **INVARIANTE — los parámetros cruzan JSON hacia el Worker** (`app.py:1134` →
-    `sweep-worker.js:76` → `sweep-worker.js:85,89`). Deben ser serializables. Un
+12. **INVARIANTE — los parámetros cruzan JSON hacia el Worker** (`app.py:1246` →
+    `sweep-worker.js:97` → `sweep-worker.js:124,107`). Deben ser serializables. Un
     parámetro no-JSON funcionará en el editor y romperá solo el barrido — un fallo
     asimétrico difícil de diagnosticar.
 

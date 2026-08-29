@@ -361,7 +361,7 @@ ajustes que dejan de ser opcionales:
    la sintaxis de módulos y puede corromper tanto `bootstrap.js` como
    `js/sweep-worker.js`. Este último es especialmente sensible: se instancia con
    `Worker.new("./js/sweep-worker.js", {"type": "module"})`
-   (`python/app.py:1144-1146`), y un Worker que falla al parsear **no** produce
+   (`python/app.py:1256-1258`), y un Worker que falla al parsear **no** produce
    un error legible en la página: el sweep simplemente no arranca.
 
 En resumen: proxear el dominio convierte un despliegue de cero configuración en
@@ -410,7 +410,7 @@ proyecto. Verificado archivo por archivo:
 | `index.html` (último `<script>`) | `./js/bootstrap.js` | relativa al documento |
 | `js/bootstrap.js:32` | `new URL('../' + sourcePath, import.meta.url)` | relativa **al módulo**, no al documento |
 | `js/sweep-worker.js:14` | `new URL('../' + sourcePath, import.meta.url)` | relativa al módulo del Worker |
-| `python/app.py:1144-1145` | `Worker.new("./js/sweep-worker.js", …)` | relativa al documento |
+| `python/app.py:1256-1257` | `Worker.new("./js/sweep-worker.js", …)` | relativa al documento |
 
 Las únicas URL absolutas del proyecto son las cuatro de jsDelivr
 (`js/bootstrap.js:1` y `:3`, `js/sweep-worker.js:1` y `:3`), que apuntan a un
@@ -579,7 +579,7 @@ comer caché):
 6. Consola sin errores.
 
 El paso 5 no es opcional: es el único que prueba el segundo runtime, el
-`Worker.new` de `python/app.py:1144-1145`, y la lista `SWEEP_FILES`.
+`Worker.new` de `python/app.py:1256-1257`, y la lista `SWEEP_FILES`.
 
 ### 8.3 Síntoma → causa
 

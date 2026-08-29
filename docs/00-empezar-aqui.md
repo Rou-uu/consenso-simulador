@@ -65,7 +65,7 @@ fuera y el consenso, si llega, es hacia ese valor.
 
 1. **Simulación individual** (botón «Simular»): una ronda sobre *tu* grafo, con
    *tus* pesos. Te muestra qué aristas transmitieron y cómo quedaron los
-   valores. Vive en `engine.py`, corre en el hilo principal.
+   valores. Vive en `engine.py` y corre en un Web Worker, igual que el barrido.
 2. **Barrido / sweep** (pestaña «Análisis de Convergencia»): **tira los pesos
    del grafo** y los sustituye por una misma probabilidad `p` aplicada a todas
    las aristas existentes, luego barre `p` de 0 a 1 y grafica la discrepancia
@@ -453,7 +453,7 @@ https://simulador.ruee.dev/ quedan descargables `scripts/`, `docs/`,
 como atributos HTML en `index.html:127-136` y como argumentos de
 `_validated_int` en `sweep.py:275-280`. No hay nada que los mantenga
 sincronizados. Peor: la lectura del lado de la app, `positive_int` en
-`app.py:1100`, **solo aplica el mínimo, no el máximo**. Es decir, el techo real
+`app.py:1212`, **solo aplica el mínimo, no el máximo**. Es decir, el techo real
 lo impone `_validated_int` **dentro del Worker**, y si lo excedes el error llega
 como texto en `#sweep-status`, no como validación del formulario.
 
@@ -481,7 +481,7 @@ flowchart TB
         M2["monta PYTHON_FILES = 9 archivos en /python<br/>app.py · models.py · geometry.py<br/>simulation/: __init__ registry rng algorithms engine sweep"]
         M3["ejecuta app.py como __main__"]
         M4["<b>STATE = AppState&#40;&#41;</b><br/>AQUÍ VIVE TODO EL ESTADO<br/>pestañas, nodos, aristas, zoom, pan,<br/>algoritmo activo y sus params, simulación"]
-        M5["render del SVG + 40 listeners<br/>+ Simular → engine.run_round"]
+        M5["render del SVG + 40 listeners<br/>+ Simular → mensaje al worker"]
         M1 --> M2 --> M3 --> M4 --> M5
       end
 

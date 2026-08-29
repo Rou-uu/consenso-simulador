@@ -51,6 +51,9 @@ if "/python" not in sys.path:
 }
 
 const runtimePromise = createRuntime();
+// Avisa en cuanto el runtime esta listo. Sin esto, el primer clic en Simular se
+// queda quieto ~15 s mientras baja Pyodide y NumPy, sin nada que lo explique.
+runtimePromise.then(() => self.postMessage({ type: "listo" }));
 
 function mensajeLegible(error) {
   const texto = error instanceof Error ? error.message : String(error);
@@ -66,16 +69,34 @@ function mensajeLegible(error) {
   return conClase ? conClase[1] : ultima.trim();
 }
 
-self.onmessage = async (event) => {
-  if (event.data?.type !== "run") {
-    return;
-  }
+// Una sola ronda para el editor. Devuelve el resultado ya serializado: el
+// contrato de `run_round` promete floats nativos y `None`, asi que el viaje por
+// JSON no pierde nada y evita convertir proxies de Python en el otro lado.
+async function correrRonda(datos) {
+  const pyodide = await runtimePromise;
+  pyodide.globals.set("_ronda_params_json", JSON.stringify(datos.params ?? {}));
 
-  try {
-    const pyodide = await runtimePromise;
-    pyodide.globals.set("_sweep_params_json", JSON.stringify(event.data.params ?? {}));
+  return await pyodide.runPythonAsync(`
+import json
 
-    await pyodide.runPythonAsync(`
+from simulation.engine import run_round
+
+_params = json.loads(_ronda_params_json)
+json.dumps(
+    run_round(
+        _params["graph"],
+        algorithm=_params.get("algorithm", "fv"),
+        params=_params.get("algorithmParams") or {},
+    )
+)
+`);
+}
+
+async function correrBarrido(datos) {
+  const pyodide = await runtimePromise;
+  pyodide.globals.set("_sweep_params_json", JSON.stringify(datos.params ?? {}));
+
+  await pyodide.runPythonAsync(`
 import json
 
 from js import Object, postMessage
@@ -94,7 +115,20 @@ for _message in iter_sweep(
 ):
     postMessage(to_js(_message, dict_converter=Object.fromEntries))
 `);
+}
 
+self.onmessage = async (event) => {
+  const tipo = event.data?.type;
+  if (tipo !== "run" && tipo !== "ronda") {
+    return;
+  }
+
+  try {
+    if (tipo === "ronda") {
+      self.postMessage({ type: "ronda", resultado: await correrRonda(event.data) });
+      return;
+    }
+    await correrBarrido(event.data);
     self.postMessage({ type: "end" });
   } catch (error) {
     self.postMessage({ type: "error", message: mensajeLegible(error) });

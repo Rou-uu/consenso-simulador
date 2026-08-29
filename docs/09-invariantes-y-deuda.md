@@ -29,7 +29,7 @@ un bug creyéndolo contrato.
 
 > **Archivos que cubre:** `scripts/equivalencia_baseline.json`, `python/models.py`, `js/bootstrap.js`, `js/sweep-worker.js`, `.nojekyll`, `python/app.py`, `python/simulation/engine.py`, `python/simulation/sweep.py`, `python/simulation/registry.py`.
 > **Qué puedes cambiar aquí:** nada de esta lista sin un plan explícito y una verificación antes y después.
-> **Qué es intocable y por qué:** las once entradas de abajo; cada una lleva su mecanismo de fallo.
+> **Qué es intocable y por qué:** las doce entradas de abajo; cada una lleva su mecanismo de fallo.
 > **Cómo verificas el cambio:** `python3 scripts/equivalencia.py` antes de tocar y otra vez después. Los números deben coincidir: `OK — 1026 casos idénticos a la línea base.`
 
 ### A.1 · `scripts/equivalencia_baseline.json` y la regla de `--grabar`
@@ -147,10 +147,10 @@ hasta el despliegue, y una vez en el despliegue el síntoma no apunta a él.
 **INVARIANTE**, y probablemente el más importante del proyecto.
 
 ```python
-# python/app.py:38
+# python/app.py:40
 def retain(callback: Callable): ...
 
-# python/app.py:44-45
+# python/app.py:46-47
 def listen(target, event_name: str, callback: Callable) -> None:
     target.addEventListener(event_name, retain(callback))
 ```
@@ -159,7 +159,7 @@ Pyodide crea un proxy automático cuando pasas una función Python a JavaScript,
 lo **destruye al terminar la llamada**. Si el callback se guarda para más tarde —
 un listener, un `setTimeout`, un `.then()`— el proxy ya no existe cuando se
 dispara. `retain()` guarda el `create_proxy` en la lista global `PROXIES`
-(`app.py:23`) para que sobreviva.
+(`app.py:22`) para que sobreviva.
 
 El fallo es el peor posible para depurar: **la interacción deja de responder sin
 ningún síntoma en pantalla**. No hay diálogo, no hay mensaje, no hay cambio de
@@ -182,14 +182,14 @@ graph LR
   X["Sin retain():<br/>el proxy muere al<br/>terminar la llamada"] -.->|corta la cadena aquí| PX
 ```
 
-Aplica a **todo** lo que cruza la frontera: `addEventListener` (`app.py:44-45` y
-las 40 llamadas a `listen()` de `bind_events`, `app.py:1189-1230`), `setTimeout`
-(`app.py:955`), el `.then()` de una promesa (`app.py:1001`) y los handlers del Web
-Worker (`app.py:1174-1175`).
+Aplica a **todo** lo que cruza la frontera: `addEventListener` (`app.py:46-47` y
+las 40 llamadas a `listen()` de `bind_events`, `app.py:1301-1342`), `setTimeout`
+(`app.py:966`), el `.then()` de una promesa (`app.py:1012`) y los handlers del Web
+Worker (`app.py:1286-1287`).
 
 Y un aviso sobre la verificación: **`scripts/smoke_ui.py` no puede detectar un
 `retain()` olvidado**, porque su doble sustituye `create_proxy` por la función
-identidad (`smoke_ui.py:107`). El único detector es abrir la página en un
+identidad (`smoke_ui.py:171`). El único detector es abrir la página en un
 navegador real y probar la interacción.
 
 ### A.7 · Las dos orientaciones de la matriz
@@ -232,7 +232,7 @@ python/simulation/engine.py:183, 312, 354, 432
 python/simulation/sweep.py:313, 418, 456
 ```
 
-`algorithm_params()` (la llamada real está en `app.py:142`) llama a `registry.get("fv")` durante el primer
+`algorithm_params()` (la llamada real está en `app.py:144`) llama a `registry.get("fv")` durante el primer
 `render_all()`. Si la clave no existe, la excepción sube antes de que se dibuje
 nada y la página se queda en el overlay.
 
@@ -293,6 +293,52 @@ quien refactorice sepa que la línea tiene una razón, y la razón no es el regi
 
 ---
 
+### A.12 · El motor no se ejecuta en el hilo principal
+
+**INVARIANTE.** `python/app.py` no importa nada de `simulation.engine` ni de
+`simulation.sweep`. Las dos entradas al motor viven dentro del Worker:
+
+```python
+# js/sweep-worker.js:78  — la ronda del editor
+from simulation.engine import run_round
+
+# js/sweep-worker.js:104 — el barrido
+from simulation.sweep import iter_sweep
+```
+
+**Motivo.** Tres cosas que el hilo principal no puede dar:
+
+1. **Se puede matar.** Un algoritmo que no termina congelaba la pestaña sin
+   remedio. Desde el Worker se le pone un plazo y se llama a `terminate()`.
+2. **No hay `document`.** Un Worker no tiene DOM, así que el día que el editor
+   acepte código escrito por quien lo use, ese código no tendrá la página al
+   alcance. El aislamiento lo da el entorno, no una lista de permisos.
+3. **Un solo camino.** Editor y barrido despachan por `registry.get(clave)`
+   dentro del mismo runtime. Dos rutas para lo mismo divergen tarde o temprano.
+
+**Consecuencia que sorprende.** `simulate` (`app.py:1055`) termina **antes** de
+que exista el resultado: manda el mensaje y devuelve. Lo que antes seguía en la
+misma función vive en `apply_round` (`app.py:1095`), y `before` —que era una
+variable local sostenida por la pila— tuvo que mudarse a `STATE.round_before`
+(`models.py:121`). Toda espera convierte una local en estado.
+
+**El precio, y cómo se paga.** El Worker carga **su propio** Pyodide y NumPy, y
+eso tarda. `start_engine_worker` lo arranca al cargar la página, no al primer
+clic, para adelantar la espera; aun así, quien pulsa «Simular» en los primeros
+segundos espera ~15 s. No hace falta encolar nada a mano: el manejador del Worker
+hace `await runtimePromise` antes de atender el mensaje, así que la petición
+espera ahí dentro. Lo que sí hace falta es **decirlo**: el Worker avisa con un
+mensaje `listo` (`js/sweep-worker.js:56`), y hasta que llega el botón dice
+*«Cargando motor…»* en vez de *«Simulando…»* (`app.py:507-512`). Sin ese aviso,
+una espera larga pero normal se ve idéntica a una aplicación colgada.
+
+**Cuándo revisarlo.** Nunca por comodidad. Si algo parece necesitar el motor en
+el hilo principal, lo que falta es un mensaje nuevo en el Worker.
+
+**Cómo lo compruebas.** `PYTHONDONTWRITEBYTECODE=1 python3 scripts/smoke_ui.py`
+—sección 7— manda una ronda, la contesta con un Worker de mentira y verifica que
+el botón se bloquee y se desbloquee, incluso por la ruta de error.
+
 ## B. Decisiones deliberadas
 
 > **Archivos que cubre:** `js/bootstrap.js`, `js/sweep-worker.js`, `python/app.py`, `python/simulation/sweep.py`, `.github/workflows/pages.yml`, las reglas de trabajo del proyecto.
@@ -328,8 +374,8 @@ distintas», la capa extra sólo añade superficie.
 ### B.2 · SVG escrito a mano, no ReactFlow ni Recharts
 
 **DECISIÓN DELIBERADA.** El canvas del grafo, el minimapa y la gráfica del sweep
-se generan como cadenas de SVG desde Python (`render_canvas`, `app.py:231`;
-`render_minimap`, `app.py:286`; `render_chart`, `app.py:422`).
+se generan como cadenas de SVG desde Python (`render_canvas`, `app.py:233`;
+`render_minimap`, `app.py:288`; `render_chart`, `app.py:424`).
 
 **Motivo.** El proyecto **no tiene build**: se publica el repositorio tal cual y
 Pyodide descarga los `.py` con `fetch()`. Meter ReactFlow o Recharts significa
@@ -368,7 +414,7 @@ unos tests unitarios de verdad valdrían más que ampliar la línea base.
 ### B.4 · Regenerar el SVG entero en vez de parchearlo
 
 **DECISIÓN DELIBERADA.** `render_canvas` reemplaza el `innerHTML` **completo** de
-las capas en cada dibujado (`app.py:268-269`, `:282`). No se actualizan atributos
+las capas en cada dibujado (`app.py:270-271`, `:282`). No se actualizan atributos
 de nodos existentes: se tira todo y se vuelve a escribir.
 
 **Motivo.** Un renderizador que parchea necesita saber qué cambió, y eso es un
@@ -383,9 +429,9 @@ muta `STATE` sin llamar a `render_all()` / `render_canvas()` deja el estado
 correcto y **la pantalla mintiendo**, sin ningún error. De aquí salen tres cosas
 que parecen arbitrarias y no lo son: la delegación de eventos en contenedores
 estáticos, la captura de puntero sobre el `<svg>` y no sobre el `<g>` del nodo, y
-el umbral de 6 px de `app.py:683` (regenerar entre los dos clics de un doble clic
+el umbral de 6 px de `app.py:694` (regenerar entre los dos clics de un doble clic
 destruye el elemento y el navegador deja de emitir `dblclick`). También la guarda
-`data-algorithm` de `app.py:170`, que evita regenerar `#algorithm-params` y
+`data-algorithm` de `app.py:172`, que evita regenerar `#algorithm-params` y
 quitarle el foco a quien está escribiendo.
 
 **Cuándo revisarla.** Cuando el perfil diga que el cuello de botella es el
@@ -469,9 +515,13 @@ mayor valor por menor esfuerzo en todo el proyecto.
 **Motivo.** No es una optimización de tamaño: es un **candado arquitectónico**.
 `python/simulation/` debe ser un motor numérico puro, sin dependencias de la capa
 de interfaz. Si algún día alguien importara `models` o `geometry` desde ahí, el
-hilo principal seguiría funcionando —tiene los 9 archivos— y **sólo el sweep
-moriría** con `ModuleNotFoundError` dentro del Worker. La lista corta convierte
-una violación de capas en un fallo detectable.
+Worker no arrancaría: `ModuleNotFoundError`. La lista corta convierte una
+violación de capas en un fallo detectable.
+
+El candado se apretó cuando la ronda del editor se mudó al Worker (§A.12): antes,
+una violación así mataba **sólo el sweep** y el editor seguía andando con sus 9
+archivos. Hoy se lleva las dos cosas, así que aparece al primer clic en «Simular»
+en vez de esconderse hasta que alguien abra el análisis de convergencia.
 
 **Cuándo revisarla.** Nunca por comodidad. Si el sweep necesita algo de
 `models.py`, la respuesta correcta es mover ese algo a `simulation/`, no ampliar
@@ -498,8 +548,8 @@ que decidir si se emite la última curva *consistente* en vez de ninguna.
 Tiene una consecuencia contraintuitiva que hay que conocer: `P(disparo) =
 w / ceil(w)`, así que un peso **1.5 dispara con probabilidad 0.75**, *menos* que
 un peso 1.0. La probabilidad **no es monótona en el peso**, y los pesos negativos
-nunca disparan. El editor valida el rango (0, 1] (`app.py:802`), donde la rareza
-no se manifiesta; la **importación de JSON no valida** (`app.py:971`), así que un
+nunca disparan. El editor valida el rango (0, 1] (`app.py:813`), donde la rareza
+no se manifiesta; la **importación de JSON no valida** (`app.py:982`), así que un
 archivo externo sí puede meter un peso fuera de rango.
 
 **Cuándo revisarla.** Sólo junto con el proyecto de referencia, o el arnés deja de
@@ -515,14 +565,14 @@ inyección HTML.
 Hay una asimetría real en `render_algorithm_params`:
 
 ```python
-# python/app.py:152  — AlgorithmSpec.label SÍ se escapa
+# python/app.py:154  — AlgorithmSpec.label SÍ se escapa
 f'<option value="{html.escape(spec.key)}">{html.escape(spec.label)}</option>'
 
-# python/app.py:176  — ParamSpec.label NO se escapa
+# python/app.py:178  — ParamSpec.label NO se escapa
 f'<label class="field-label" for="param-{html.escape(param.name)}">{param.label}</label>'
 ```
 
-**Motivo**, escrito en el docstring de la propia función (`app.py:161-168`): las
+**Motivo**, escrito en el docstring de la propia función (`app.py:163-170`): las
 etiquetas de parámetro se insertan como HTML **a propósito** para poder usar
 `<code>` en ellas. La fuente de ese texto es `python/simulation/algorithms.py`,
 que es **código del proyecto**, no entrada de usuario: no cruza ninguna frontera
@@ -567,7 +617,7 @@ transmitieron.
 presentación** en el `<path>`:
 
 ```python
-# python/app.py:251-252
+# python/app.py:253-254
 f'<path class="edge-path" d="{geometry["path"]}" fill="none" stroke="{color}" '
 f'stroke-width="{width}"{marker}></path>'
 ```
@@ -592,7 +642,7 @@ graph TD
   CASC2 --> R2["Sí se aplica<br/>→ la animación es lo único visible"]
 ```
 
-**Archivo.** `python/app.py:251-252` (emisión) y el selector `.edge-path` de
+**Archivo.** `python/app.py:253-254` (emisión) y el selector `.edge-path` de
 `css/app.css` (regla que gana).
 
 **¿Es seguro arreglarlo?** **Sí, y es la deuda con mejor relación
@@ -621,7 +671,7 @@ en la ruta de aristas es `edge-animated`, en el `<g>` contenedor. Las cuatro
 reglas son código muerto: el CSS está preparado para una solución que el Python
 no implementa.
 
-**Archivo.** `python/app.py:231-260` (`render_canvas`, no emite) y los selectores
+**Archivo.** `python/app.py:233-262` (`render_canvas`, no emite) y los selectores
 `.edge-path.is-*` de `css/app.css` (existen, nadie los activa).
 
 **¿Es seguro arreglarlo?** **Sí.** El arreglo de C.1 y C.2 es el mismo cambio:
@@ -633,7 +683,7 @@ la presentación cambia; `scripts/smoke_ui.py` compara marcado generado, así qu
 conviene correrlo después.
 
 Aviso de bonus: `render_controls` anuncia en la leyenda **«aristas verdes =
-propagación»** (`app.py:508`) y los colores reales son naranja y morado. El texto
+propagación»** (`app.py:519`) y los colores reales son naranja y morado. El texto
 está obsoleto además de invisible. Arréglalo en el mismo commit.
 
 ### C.3 · La selección no se distingue visualmente
@@ -643,20 +693,20 @@ tecla destructiva.
 
 **Síntoma visible.** Haces clic en un nodo o en una arista y **no pasa nada
 visible**. Pero el estado sí cambió, y **la tecla `Delete` borra lo que esté
-seleccionado** (`app.py:864-871`). Es decir: el usuario borra a ciegas.
+seleccionado** (`app.py:875-882`). Es decir: el usuario borra a ciegas.
 
 **Causa.** Dos huecos distintos que producen el mismo resultado:
 
-- **Nodos:** `render_canvas` sí añade la clase (`app.py:274-276` genera
+- **Nodos:** `render_canvas` sí añade la clase (`app.py:276-278` genera
   `class="graph-node selected"`), pero **no existe ninguna regla
   `.graph-node.selected`** en `css/app.css`. Las únicas reglas de nodo son
   `.graph-node`, `.graph-node text`, `.shift-mode .graph-node` y
   `.graph-node:hover .node-circle`.
-- **Aristas:** `edge_style` sí tiene su rama `selected` (`app.py:226-227`,
+- **Aristas:** `edge_style` sí tiene su rama `selected` (`app.py:228-229`,
   `#6E7CF2` grosor 4), pero la pinta como atributo de presentación y **la pierde
   por la cascada**, exactamente igual que C.1.
 
-**Archivo.** `python/app.py:274-276`, `python/app.py:226-227`, y la ausencia del
+**Archivo.** `python/app.py:276-278`, `python/app.py:228-229`, y la ausencia del
 selector `.graph-node.selected` en `css/app.css`.
 
 **¿Es seguro arreglarlo?** **Sí, y es prioritario por seguridad de uso.** Para
@@ -678,30 +728,30 @@ porque vuelve a descargar Pyodide y NumPy desde cero.
 función `is_cancelled` (`:59`), `_check_cancelled` (`:78`) y sus tres llamadas
 (`:160`, `:373`, `:375`), más el evento `cancelled` que `iter_sweep` puede emitir.
 Pero **el Worker llama a `iter_sweep` sin el argumento `cancel`**
-(`js/sweep-worker.js:86-94`): pasa el grafo, `algorithm`, `params`,
+(`js/sweep-worker.js:107-115`): pasa el grafo, `algorithm`, `params`,
 `num_p_points`, `total_simulations_per_p`, `iterations` y `rounds`, y nada más.
 
 En consecuencia, **hoy la cancelación real es matar el Worker**: `stop_sweep`
-llama a `WORKER.terminate()` (`app.py:1114-1118`). Y `finish_sweep`
-(`app.py:1179-1183`) hace lo mismo al terminar normalmente — así que **cada
+llama a `WORKER.terminate()` (`app.py:1226-1230`). Y `finish_sweep`
+(`app.py:1291-1295`) hace lo mismo al terminar normalmente — así que **cada
 ejecución del sweep destruye el runtime Pyodide caliente**, no sólo las
 canceladas. Como corolario: **el evento `cancelled` es inalcanzable**, y
-`on_message` (`app.py:1149-1168`) tampoco tiene rama para él.
+`on_message` (`app.py:1261-1280`) tampoco tiene rama para él.
 
 ```mermaid
 graph TD
   subgraph hoy["Lo que pasa hoy"]
-    BTN["Botón Detener"] --> ST["stop_sweep (app.py:1114)"]
+    BTN["Botón Detener"] --> ST["stop_sweep (app.py:1226)"]
     ST --> TERM["WORKER.terminate()"]
     TERM --> DEAD["Pyodide B destruido<br/>el siguiente sweep<br/>vuelve a descargar todo"]
-    FIN["finish_sweep (app.py:1179)"] --> TERM
+    FIN["finish_sweep (app.py:1291)"] --> TERM
   end
   subgraph listo["Lo que está escrito y no se usa"]
     TOK["CancellationToken (sweep.py:41)"] --> CHK["_check_cancelled ×3"]
     CHK --> EV["yield {'type':'cancelled'}"]
     EV -.->|nadie lo recibe:<br/>on_message no tiene rama| NADA["—"]
   end
-  WK["sweep-worker.js:86-94<br/>iter_sweep(… ) SIN cancel="] -.->|el eslabón que falta| TOK
+  WK["sweep-worker.js:107-115<br/>iter_sweep(… ) SIN cancel="] -.->|el eslabón que falta| TOK
 ```
 
 También hay dos APIs completas y probadas que la aplicación no usa,
@@ -709,8 +759,8 @@ También hay dos APIs completas y probadas que la aplicación no usa,
 previsto para un controlador en el hilo principal y las **únicas consumidoras
 posibles** del token. No las borres creyéndolas restos.
 
-**Archivo.** `js/sweep-worker.js:86-94`, `python/simulation/sweep.py:41-80`,
-`python/app.py:1114-1118` y `:1179-1183`.
+**Archivo.** `js/sweep-worker.js:107-115`, `python/simulation/sweep.py:41-80`,
+`python/app.py:1226-1230` y `:1179-1183`.
 
 **¿Es seguro arreglarlo?** **Con cuidado.** Cablearlo es más que pasar
 `cancel=`: el Worker tendría que recibir un mensaje de cancelación y consultarlo
@@ -731,8 +781,8 @@ rojo, no hay icono, no hay nada que diga «esto es un error». Un `Error: …` p
 pasar por una línea de estado más.
 
 **Causa.** `app.py` emite la clase en dos sitios —`on_message` cuando llega un
-evento `{type:'error'}` (`app.py:1164`) y `on_error` cuando el Worker falla
-(`app.py:1171`)—:
+evento `{type:'error'}` (`app.py:1276`) y `on_error` cuando el Worker falla
+(`app.py:1283`)—:
 
 ```python
 by_id("sweep-status").innerHTML = f'<p class="sweep-error">Error: {…}</p>'
@@ -740,7 +790,7 @@ by_id("sweep-status").innerHTML = f'<p class="sweep-error">Error: {…}</p>'
 
 y **el selector `.sweep-error` no aparece en `css/app.css`** (cero coincidencias).
 
-**Archivo.** `python/app.py:1164` y `:1171` (emiten), `css/app.css` (no la define).
+**Archivo.** `python/app.py:1276` y `:1171` (emiten), `css/app.css` (no la define).
 
 **¿Es seguro arreglarlo?** **Sí, completamente.** Añadir una regla
 `.sweep-error { color: … }` es puramente aditivo: ningún selector existente
@@ -752,7 +802,7 @@ cambia de comportamiento y nada numérico está implicado.
 grafo dirigido: `add_edge` deduplica en no dirigido), tras simular ambas quedan
 marcadas igual, aunque el motor solo haya reportado una transmisión.
 
-**Causa.** `apply_propagation` (`python/app.py:1028`) empareja cada arista con el
+**Causa.** `apply_propagation` (`python/app.py:1039`) empareja cada arista con el
 **primer** registro de propagación que coincida en `source` y `target`:
 
 ```python
@@ -785,33 +835,33 @@ tocarlo es seguro.
 | Síntoma visible | Causa | Archivo | ¿Seguro arreglarlo? |
 |---|---|---|---|
 | Al conectar con Shift no se ve la «goma elástica»; el gesto funciona pero a ciegas | El selector `.connection-line` **no existe** en `css/app.css`. Un `<path>` SVG sin estilo usa `fill` negro y `stroke: none`, y un trazo de dos puntos tiene área cero | `css/app.css` (falta la regla) | **Sí.** Añadir la regla, puramente aditivo |
-| El minimapa dibuja los nodos pero **nunca las aristas** | Se generan como `<line>` **sin atributo `stroke`** y no hay regla `#minimap-edges line`. El `stroke` por defecto es `none`: se calculan y no se ven | `python/app.py:315` + `css/app.css` | **Sí.** Añadir la regla (mejor que el atributo, ver C.1) |
+| El minimapa dibuja los nodos pero **nunca las aristas** | Se generan como `<line>` **sin atributo `stroke`** y no hay regla `#minimap-edges line`. El `stroke` por defecto es `none`: se calculan y no se ven | `python/app.py:317` + `css/app.css` | **Sí.** Añadir la regla (mejor que el atributo, ver C.1) |
 | Una app que **falló al arrancar** parece una que está tardando | No hay regla para `[data-state="error"]`, el `<p>Cargando simulador…</p>` de `index.html:13` nunca se actualiza (sólo cambia `#loader-detail`) y los puntos animados siguen pulsando | `index.html:13`, `js/bootstrap.js`, `css/app.css` | **Sí**, y es de alto valor: hoy el arranque fallido es indistinguible del lento |
 | El overlay desaparece de golpe, sin el fundido que el CSS define | `.python-loader.is-ready` define una transición de 0.2 s y **nadie aplica nunca esa clase**: `bootstrap.js` usa `dataset.state` y `hidden`, y `[hidden] { display: none !important }` gana | `js/bootstrap.js` + selector `.python-loader.is-ready` | **Sí.** Aplicar la clase o borrar la regla |
-| Durante toda la primera iteración se lee «Cargando motor Python del sweep…» aunque ya esté calculando | El evento `start` **no actualiza el texto de estado**; y la rama `loading` de `on_message` es código muerto: ningún emisor produce ese tipo | `python/app.py:1166-1168` | **Sí.** Cambiar el texto en `start` y borrar la rama `loading` |
+| Durante toda la primera iteración se lee «Cargando motor Python del sweep…» aunque ya esté calculando | El evento `start` **no actualiza el texto de estado**; y la rama `loading` de `on_message` es código muerto: ningún emisor produce ese tipo | `python/app.py:1278-1280` | **Sí.** Cambiar el texto en `start` y borrar la rama `loading` |
 | La ayuda promete «Shift mientras arrastras un nodo: snap a múltiplos de 10» y **no existe** | Nunca se implementó, y además es inalcanzable: `Shift + pointerdown` sobre un nodo entra en modo conectar | `index.html:81` | **Sí**: implementarlo, o borrar la línea. Lo segundo es honesto y cuesta 10 segundos |
-| La banda de confianza se dibuja **por debajo del eje X** cerca de p=0 | Los límites del IC no se recortan (`sweep.py:231`), el SVG usa `overflow: visible` y la escala se calcula sólo sobre `ciHigh` y `mean` | `python/simulation/sweep.py:231`, `python/app.py:429-431` | **Es esperado, no un bug de dibujo.** Recortar el IC a ≥0 cambiaría números; si molesta, recorta sólo en el dibujado |
+| La banda de confianza se dibuja **por debajo del eje X** cerca de p=0 | Los límites del IC no se recortan (`sweep.py:231`), el SVG usa `overflow: visible` y la escala se calcula sólo sobre `ciHigh` y `mean` | `python/simulation/sweep.py:231`, `python/app.py:431-433` | **Es esperado, no un bug de dibujo.** Recortar el IC a ≥0 cambiaría números; si molesta, recorta sólo en el dibujado |
 
 #### Código muerto y desincronizaciones
 
 | Síntoma visible | Causa | Archivo | ¿Seguro arreglarlo? |
 |---|---|---|---|
-| Ninguno. La memoria de la pestaña crece durante toda la sesión | `PROXIES` **nunca se vacía**. Cada `retain()` dentro de un handler (exportar, importar, cada barrido) acumula un proxy para siempre; `start_sweep` suma **dos por ejecución** | `python/app.py:23`, `:1174-1175` | **Con cuidado.** Es una fuga pequeña pero real; liberar un proxy que todavía está enganchado reproduce exactamente el fallo de §A.6 |
-| Ninguno. Parece la fuente de verdad de la escala del eje Y y no lo es | `CHART_MAX_Y` se inicializa en `app.py:31`, se asigna en `:433` y **no se lee en ningún sitio** | `python/app.py:31`, `:433` | **Sí.** Borrarla, o usarla de verdad en `on_chart_pointer_move` |
-| Ninguno, hasta que alguien corrige una de las dos copias | `AppState.capture_initial()` **no lo llama nadie**; la lógica equivalente vive **inline** en `mark_graph_changed` (`app.py:191-193`). Dos versiones de la misma regla, listas para divergir | `python/models.py:132-134`, `python/app.py:191-193` | **Sí.** Unificar: o `mark_graph_changed` llama al método, o el método desaparece |
-| Cambiar un límite del sweep en el HTML no cambia el límite real | Los `max` de los `<input>` (`index.html:127-136`) no se imponen en JavaScript ni en `positive_int` (`app.py:1100-1104`, que sólo aplica el **mínimo**). Los rangos reales viven sólo en `_validated_int` (`sweep.py:275-280`) | `index.html:127-136` + `python/simulation/sweep.py:275-280` | **Sí**, pero hay que tocar **los dos** o quedan desincronizados |
+| Ninguno. La memoria de la pestaña crece durante toda la sesión | `PROXIES` **nunca se vacía**. Cada `retain()` dentro de un handler (exportar, importar, cada barrido) acumula un proxy para siempre; `start_sweep` suma **dos por ejecución** | `python/app.py:22`, `:1174-1175` | **Con cuidado.** Es una fuga pequeña pero real; liberar un proxy que todavía está enganchado reproduce exactamente el fallo de §A.6 |
+| Ninguno. Parece la fuente de verdad de la escala del eje Y y no lo es | `CHART_MAX_Y` se inicializa en `app.py:33`, se asigna en `:433` y **no se lee en ningún sitio** | `python/app.py:33`, `:433` | **Sí.** Borrarla, o usarla de verdad en `on_chart_pointer_move` |
+| Ninguno, hasta que alguien corrige una de las dos copias | `AppState.capture_initial()` **no lo llama nadie**; la lógica equivalente vive **inline** en `mark_graph_changed` (`app.py:193-195`). Dos versiones de la misma regla, listas para divergir | `python/models.py:142-144`, `python/app.py:193-195` | **Sí.** Unificar: o `mark_graph_changed` llama al método, o el método desaparece |
+| Cambiar un límite del sweep en el HTML no cambia el límite real | Los `max` de los `<input>` (`index.html:127-136`) no se imponen en JavaScript ni en `positive_int` (`app.py:1212-1216`, que sólo aplica el **mínimo**). Los rangos reales viven sólo en `_validated_int` (`sweep.py:275-280`) | `index.html:127-136` + `python/simulation/sweep.py:275-280` | **Sí**, pero hay que tocar **los dos** o quedan desincronizados |
 | Un JSON con `"value": "0.5"` (string) rompe *dentro* del algoritmo, mucho después de importarlo | `Node.from_json` **no coerciona `value`** (`models.py:18-27`), mientras que `Edge.from_json` sí fuerza `str(weight)`. `get_values` produce un array de dtype `<U3`. La UI se ve bien porque `value_color` es robusta a basura | `python/models.py:18-27` | **Con cuidado.** Coercionar cambia comportamiento observable del motor: corre `equivalencia.py` antes y después |
 | «Ajustar vista» aleja más de lo esperado | El zoom se recorta a **[0.2, 3.0]** con la rueda y los botones pero a **[0.2, 2.0]** en `fit_transform` | `python/geometry.py:107` | **Sí.** Puramente visual |
-| Escape no cierra los diálogos de **confirmación** | `Enter`/`Escape` están enganchados al `<input>` (`app.py:1230`), así que con `input_mode=False` el `<input>` no tiene el foco. Además hay un único `DIALOG_CALLBACK` global: abrir un diálogo sobre otro pisa el anterior | `python/app.py:1230`, `:107-112` | **Sí.** Mover el listener al `document` o al contenedor del diálogo |
+| Escape no cierra los diálogos de **confirmación** | `Enter`/`Escape` están enganchados al `<input>` (`app.py:1342`), así que con `input_mode=False` el `<input>` no tiene el foco. Además hay un único `DIALOG_CALLBACK` global: abrir un diálogo sobre otro pisa el anterior | `python/app.py:1342`, `:107-112` | **Sí.** Mover el listener al `document` o al contenedor del diálogo |
 
 #### Rendimiento
 
 | Síntoma visible | Causa | Archivo | ¿Seguro arreglarlo? |
 |---|---|---|---|
-| **El arrastre de nodos salta** con varios cientos de aristas | `render_canvas` es **O(N + E²)**: `has_reverse` recorre todas las aristas por cada arista, y se ejecuta en **cada `pointermove`**. Encima, `render_minimap` llama a `getBoundingClientRect()`, que fuerza layout síncrono | `python/app.py:231-284`, `:286` | **Sí.** Precalcular un `set` de pares `(source, target)` una vez por dibujado convierte E² en E |
-| Soltar un nodo se siente más pesado que arrastrarlo | `on_canvas_pointer_up` llama a `render_all()`, no a `render_canvas()`; y `render_all` incluye `render_json()`, que reconstruye el JSON completo con `graph_data()` + `json.dumps` **aunque el panel esté oculto** (no hay guarda por `show_json`) | `python/app.py:486-489`, `:708` | **Sí.** Añadir la guarda por `show_json` es aditivo y seguro |
-| Los grafos grandes tardan en aplicar el resultado de una ronda | `apply_propagation` es **O(E × P)** por el `next()` lineal sobre `propagation` para cada arista | `python/app.py:1028-1042` | **Sí.** Indexar `propagation` por `(source, target)` en un dict |
-| En grafos **no dirigidos**, sólo se resalta una de las dos direcciones | `propagation` trae dos registros por arista (ida y vuelta) pero `apply_propagation` busca el par **en el orden en que la arista fue dibujada**, así que el flag de la dirección inversa queda invisible | `python/app.py:1034` | **Sí**, pero decide primero qué debe significar visualmente «transmitió en la otra dirección» |
+| **El arrastre de nodos salta** con varios cientos de aristas | `render_canvas` es **O(N + E²)**: `has_reverse` recorre todas las aristas por cada arista, y se ejecuta en **cada `pointermove`**. Encima, `render_minimap` llama a `getBoundingClientRect()`, que fuerza layout síncrono | `python/app.py:233-286`, `:286` | **Sí.** Precalcular un `set` de pares `(source, target)` una vez por dibujado convierte E² en E |
+| Soltar un nodo se siente más pesado que arrastrarlo | `on_canvas_pointer_up` llama a `render_all()`, no a `render_canvas()`; y `render_all` incluye `render_json()`, que reconstruye el JSON completo con `graph_data()` + `json.dumps` **aunque el panel esté oculto** (no hay guarda por `show_json`) | `python/app.py:488-491`, `:708` | **Sí.** Añadir la guarda por `show_json` es aditivo y seguro |
+| Los grafos grandes tardan en aplicar el resultado de una ronda | `apply_propagation` es **O(E × P)** por el `next()` lineal sobre `propagation` para cada arista | `python/app.py:1039-1053` | **Sí.** Indexar `propagation` por `(source, target)` en un dict |
+| En grafos **no dirigidos**, sólo se resalta una de las dos direcciones | `propagation` trae dos registros por arista (ida y vuelta) pero `apply_propagation` busca el par **en el orden en que la arista fue dibujada**, así que el flag de la dirección inversa queda invisible | `python/app.py:1045` | **Sí**, pero decide primero qué debe significar visualmente «transmitió en la otra dirección» |
 | La pestaña se queda sin memoria a media curva | El pico es `S · n · n · 8` bytes **por tensor**, con 3 o 4 vivos a la vez. Con S=5000 y n=50, cada tensor pide ~100 MB. Bajar `iterations` a 1 «para ir más rápido» **multiplica S** | `python/simulation/sweep.py` (`round_batch`) | **No es un bug**: es el coste del método. Documentado aquí para que no se busque en otro sitio |
 
 ---
@@ -840,18 +890,18 @@ graph TD
 | Síntoma visible | Causa probable | Dónde mirar | Sección |
 |---|---|---|---|
 | **La página se queda en el overlay** de carga | Un `.py` falta en `PYTHON_FILES` → 404 en `fetchPythonFile`. En producción: falta `.nojekyll` y `simulation/__init__.py` da 404 aunque local funcione. También: `SyntaxError` en un `.py`, la clave `"fv"` renombrada (`algorithm_params` revienta antes del primer dibujado), la página abierta con `file://`, o un hosting con fallback tipo SPA que devuelve `index.html` con 200 en vez de un 404 honesto (Pyodide monta HTML como si fuera Python) | **Consola** y pestaña **Red** del navegador. `#loader-detail` da el último paso alcanzado. Recuerda: el estado de error **se ve igual** que el de carga (§C.6) | §01, §A.3, §A.5, §A.8 |
-| **Un botón dejó de responder** — sin error, sin diálogo, sin nada | (1) `retain()` / `create_proxy` olvidado en ese callback: el proxy murió y el listener apunta a la nada. (2) El listener se puso **directamente sobre contenido que se regenera** (hijos de `#graph-tabs`, de las capas del canvas, de `#algorithm-params`) y se perdió en el primer `render_all()` | **La consola del navegador**, y sólo ahí. `scripts/smoke_ui.py` **no puede detectarlo** (sustituye `create_proxy` por la identidad, `smoke_ui.py:107`) | §A.6, §03, §B.4 |
+| **Un botón dejó de responder** — sin error, sin diálogo, sin nada | (1) `retain()` / `create_proxy` olvidado en ese callback: el proxy murió y el listener apunta a la nada. (2) El listener se puso **directamente sobre contenido que se regenera** (hijos de `#graph-tabs`, de las capas del canvas, de `#algorithm-params`) y se perdió en el primer `render_all()` | **La consola del navegador**, y sólo ahí. `scripts/smoke_ui.py` **no puede detectarlo** (sustituye `create_proxy` por la identidad, `smoke_ui.py:171`) | §A.6, §03, §B.4 |
 | **El sweep no arranca** | (1) Un `.py` falta en `SWEEP_FILES` → `ModuleNotFoundError` dentro del Worker. (2) Validación de rangos: `_validated_int` rechaza el parámetro y la excepción **sube antes del evento `start`**, así que llega como `{type:'error'}` del Worker, no como evento del stream. (3) El algoritmo no tiene versión `batch`. (4) El grafo no tiene nodos: el botón está `disabled` | `#sweep-status` primero; luego la **consola** (los errores del Worker aparecen ahí). Para (2), `sweep.py:275-280`, no el contrato de eventos | §A.3, §05, §D fila siguiente |
-| **El sweep muere a media curva** | Memoria: `S · n · n · 8` bytes por tensor con 3-4 vivos. Bajar `iterations` a 1 multiplica S. También: un `np.float64` colado en `points()` rompe `to_js` (`sweep-worker.js:95`) con un error que no menciona ni a NumPy ni a `points()`. Y un valor no serializable en `params` cruza `JSON.stringify` y **sólo rompe el barrido**, nunca el editor | Consola + el medidor de memoria de la pestaña. `sweep.py:236-239` (`points()` debe devolver `float`/`int` **nativos**) | §05, §C.6 |
+| **El sweep muere a media curva** | Memoria: `S · n · n · 8` bytes por tensor con 3-4 vivos. Bajar `iterations` a 1 multiplica S. También: un `np.float64` colado en `points()` rompe `to_js` (`sweep-worker.js:116`) con un error que no menciona ni a NumPy ni a `points()`. Y un valor no serializable en `params` cruza `JSON.stringify` y **sólo rompe el barrido**, nunca el editor | Consola + el medidor de memoria de la pestaña. `sweep.py:236-239` (`points()` debe devolver `float`/`int` **nativos**) | §05, §C.6 |
 | **El arnés falla tras un cambio** (y falla en 40 casos, o en casi 1026) | (1) Cambiaste el **orden o la cantidad** de aleatoriedad consumida: eso rompe casi los 1026, no sólo el caso que lo motivó. (2) Un `.pyc` obsoleto con el mismo mtime que el fuente — letal durante un control negativo, e invisible en `git status` porque `.gitignore` ignora `__pycache__/`. (3) Tu NumPy no es 2.4.5 o tu Python no es 3.12: la línea base compara **flotantes exactos**. (4) Cambiaste un mensaje de error congelado (§A.9) | Ejecuta **siempre** con `PYTHONDONTWRITEBYTECODE=1`. Y ojo: el script imprime **sólo las primeras 40 diferencias** (`equivalencia.py:477-480`) y resume el resto con un contador. «40 diferencias impresas» ≠ «40 diferencias». Si tu NumPy no coincide: **no regrabes, reporta** | §07, §A.1 |
 | **El algoritmo nuevo no sale en el selector** | La llamada a `register(...)` no se ejecutó: o el módulo no se importa (todo `algorithms.py` entra vía `simulation/__init__.py` y el re-export de `engine.py:28`), o el `.py` nuevo no está en `PYTHON_FILES`, o hay un error de import y la app ni arrancó. Recuerda también que **el orden del desplegable es el orden de las llamadas a `register`** (`specs()` devuelve `tuple(REGISTRY.values())`, `registry.py:106-109`) | Consola. Y `python3 scripts/smoke_ui.py`, que sí ejercita el marcado generado desde el registro | §06, §A.3 |
-| **El algoritmo nuevo sale en el selector pero el sweep lo rechaza** | Tiene `batch=None`. El `<select>` ofrece **todos** los registrados **sin filtrar por `batch`** (`render_algorithm_options`, `app.py:149-154`), así que un algoritmo sólo escalar es seleccionable y muere en `registry.batch_of` (`registry.py:99`) — con un mensaje que **aclara que sí funciona en el editor**. La promesa «la interfaz aparece sola» de §06 viene con este borde | `#sweep-status`. El mensaje es explícito; está congelado en la línea base, no lo reescribas (§A.9) | §06, §A.9 |
-| **El arrastre de nodos salta** | `render_canvas` es O(N + E²) por `has_reverse` y corre en **cada `pointermove`**; más el `getBoundingClientRect()` de `render_minimap`, que fuerza layout síncrono. Al soltar, `on_canvas_pointer_up` llama a `render_all()`, que reconstruye el JSON completo aunque el panel esté oculto | Perfilador del navegador. `app.py:231-284` y `:486-489`. Si el salto es **entre dos clics** y no durante el arrastre, es otra cosa: el umbral de 6 px de `app.py:683` | §C.6, §03 |
+| **El algoritmo nuevo sale en el selector pero el sweep lo rechaza** | Tiene `batch=None`. El `<select>` ofrece **todos** los registrados **sin filtrar por `batch`** (`render_algorithm_options`, `app.py:151-156`), así que un algoritmo sólo escalar es seleccionable y muere en `registry.batch_of` (`registry.py:99`) — con un mensaje que **aclara que sí funciona en el editor**. La promesa «la interfaz aparece sola» de §06 viene con este borde | `#sweep-status`. El mensaje es explícito; está congelado en la línea base, no lo reescribas (§A.9) | §06, §A.9 |
+| **El arrastre de nodos salta** | `render_canvas` es O(N + E²) por `has_reverse` y corre en **cada `pointermove`**; más el `getBoundingClientRect()` de `render_minimap`, que fuerza layout síncrono. Al soltar, `on_canvas_pointer_up` llama a `render_all()`, que reconstruye el JSON completo aunque el panel esté oculto | Perfilador del navegador. `app.py:233-286` y `:486-489`. Si el salto es **entre dos clics** y no durante el arrastre, es otra cosa: el umbral de 6 px de `app.py:694` | §C.6, §03 |
 | **El gráfico del sweep sale plano** | (1) **El sweep tira los pesos**: `edge_mask = base_matrix > 0` y `np.where(edge_mask, p, 0.0)` ponen el mismo `p` en todas las aristas. Si esperabas ver el efecto de los pesos que escribiste, no lo verás nunca — y un peso `0` o negativo **borra la arista del barrido** aunque se siga viendo en el editor. (2) Todos los nodos con el mismo valor inicial: discrepancia 0 para todo `p`. (3) Un `batch` nuevo que reduce sobre **el eje equivocado** (§A.7): resultados plausibles y falsos, sin ningún error. (4) `finish_iteration()` movido dentro del bucle de `p` multiplicaría `simulations_per_p` por `num_p_points` y hundiría toda la curva **sin lanzar ninguna excepción** | `sweep.py:287` y `:376` para (1); `sweep.py:197` vs `:206` para (4). Para (3): prueba el algoritmo en un grafo **dirigido y asimétrico** — en los no dirigidos el eje invertido pasa desapercibido | §05, §A.7 |
-| **«Error al ejecutar la simulación: 'node_7'»** (diálogo genérico con un id dentro) | Una **arista huérfana**: apunta a un nodo que no existe. `render_canvas` la salta en silencio y el grafo se dibuja perfecto; `get_adj` lanza `KeyError` en `indices[edge["source"]]`. **Dibujar nunca falla; simular sí.** El editor previene el caso, un JSON importado no | `python/simulation/engine.py:62`, `python/app.py:243-244`. El id del diálogo **es** el nodo que falta | §02, §04 |
-| **«Resetear» devuelve un grafo que no es el que yo tenía** | Con una simulación en pantalla, `mark_graph_changed` **no actualiza** `initial_graph` (`app.py:191-193`). Reacomodar nodos después de simular y pulsar Resetear pierde las posiciones nuevas. Y al revés: omitir `mark_graph_changed()` en un handler que modifica el grafo deja el snapshot obsoleto | `python/app.py:187-194` y todos los handlers que mutan `STATE.tab` | §03 |
-| **El doble clic no abre el editor de valor del nodo** (con ratón físico) | El umbral de 6 px de `app.py:683` está bajado o quitado. El temblor natural del ratón entre los dos clics dispara un arrastre, se reemplaza el SVG, y el navegador **deja de emitir `dblclick`** porque el elemento desapareció | `python/app.py:673-690`. No lo bajes; existe exactamente por esto | §B.4, §03 |
-| **Cada barrido tarda una eternidad en empezar** | `finish_sweep` llama a `WORKER.terminate()` **también cuando el sweep terminó bien**, así que cada ejecución destruye el runtime Pyodide caliente y la siguiente vuelve a descargar Pyodide, NumPy y los seis `.py` desde jsDelivr | `python/app.py:1179-1183`. Y sí: **la app depende de la red** en la primera carga y potencialmente en **cada** barrido | §C.4, §05 |
+| **«Error al ejecutar la simulación: 'node_7'»** (diálogo genérico con un id dentro) | Una **arista huérfana**: apunta a un nodo que no existe. `render_canvas` la salta en silencio y el grafo se dibuja perfecto; `get_adj` lanza `KeyError` en `indices[edge["source"]]`. **Dibujar nunca falla; simular sí.** El editor previene el caso, un JSON importado no | `python/simulation/engine.py:62`, `python/app.py:245-246`. El id del diálogo **es** el nodo que falta | §02, §04 |
+| **«Resetear» devuelve un grafo que no es el que yo tenía** | Con una simulación en pantalla, `mark_graph_changed` **no actualiza** `initial_graph` (`app.py:193-195`). Reacomodar nodos después de simular y pulsar Resetear pierde las posiciones nuevas. Y al revés: omitir `mark_graph_changed()` en un handler que modifica el grafo deja el snapshot obsoleto | `python/app.py:189-196` y todos los handlers que mutan `STATE.tab` | §03 |
+| **El doble clic no abre el editor de valor del nodo** (con ratón físico) | El umbral de 6 px de `app.py:694` está bajado o quitado. El temblor natural del ratón entre los dos clics dispara un arrastre, se reemplaza el SVG, y el navegador **deja de emitir `dblclick`** porque el elemento desapareció | `python/app.py:684-701`. No lo bajes; existe exactamente por esto | §B.4, §03 |
+| **Cada barrido tarda una eternidad en empezar** | `finish_sweep` llama a `WORKER.terminate()` **también cuando el sweep terminó bien**, así que cada ejecución destruye el runtime Pyodide caliente y la siguiente vuelve a descargar Pyodide, NumPy y los seis `.py` desde jsDelivr | `python/app.py:1291-1295`. Y sí: **la app depende de la red** en la primera carga y potencialmente en **cada** barrido | §C.4, §05 |
 
 ---
 

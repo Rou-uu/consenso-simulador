@@ -66,8 +66,8 @@ HTTP del navegador suaviza el costo, no lo elimina.
 
 > **Archivos que cubre:** `index.html` (194 líneas) y los selectores del overlay en `css/app.css` (`.python-loader`, `.loader-mark`, `[hidden]`).
 > **Que puedes cambiar aqui:** textos, clases, orden visual, contenedores nuevos, atributos ARIA.
-> **Que es intocable y por que:** todo `id` que Python busca con `by_id()` (`python/app.py:34`), y que `#python-loader` se **superponga** en vez de ocultar `#app`.
-> **Como verificas el cambio:** a ojo en <http://localhost:8000>. `python3 scripts/smoke_ui.py` **no sirve** para esto: su DOM falso crea cualquier `id` que se le pida (`scripts/smoke_ui.py:83-84`), así que un `id` renombrado pasa el smoke y falla en el navegador.
+> **Que es intocable y por que:** todo `id` que Python busca con `by_id()` (`python/app.py:36`), y que `#python-loader` se **superponga** en vez de ocultar `#app`.
+> **Como verificas el cambio:** a ojo en <http://localhost:8000>. `python3 scripts/smoke_ui.py` **no sirve** para esto: su DOM falso crea cualquier `id` que se le pida (`scripts/smoke_ui.py:92-93`), así que un `id` renombrado pasa el smoke y falla en el navegador.
 
 194 líneas de marcado **sin una sola línea de lógica**. Su papel es doble:
 
@@ -128,7 +128,7 @@ svg#graph-canvas
 
 Ese reparto es el motivo por el que `bind_events()` puede enganchar **un solo**
 listener por tipo de evento al `<svg>` y no a cada nodo: todo es delegación.
-`render_canvas()` (`python/app.py:231`) puede tirar y regenerar 500 círculos sin
+`render_canvas()` (`python/app.py:233`) puede tirar y regenerar 500 círculos sin
 que se pierda un solo listener, porque los listeners están en el padre estático.
 El mecanismo completo de regeneración y delegación vive en
 [§3 · La capa de interfaz](03-interfaz.md).
@@ -137,13 +137,13 @@ Hay marcado estático que Python **sustituye** en el primer render, y esto
 confunde a quien lee el HTML esperando encontrarlo en el DOM vivo:
 
 - `index.html:27-30` dibuja un `<button id="tab_0">` y un `<button
-  id="new-tab-btn">`. `render_tabs()` (`python/app.py:200-216`) reescribe el
+  id="new-tab-btn">`. `render_tabs()` (`python/app.py:202-218`) reescribe el
   `innerHTML` de `#graph-tabs` entero y emite **`<div class="tab">`**, no
-  `<button>`. El botón `+ Nueva` se regenera también (`python/app.py:215`).
+  `<button>`. El botón `+ Nueva` se regenera también (`python/app.py:217`).
   Es decir: el marcado del HTML es una maqueta que dura milisegundos.
 - `index.html:63` declara `<select id="algorithm-select">` **vacío a
   propósito**. Las opciones las genera `render_algorithm_options()`
-  (`python/app.py:149-158`) desde el registro de algoritmos. Por eso agregar un
+  (`python/app.py:151-160`) desde el registro de algoritmos. Por eso agregar un
   algoritmo no toca ni `index.html` ni JavaScript (lo dice el comentario en
   `index.html:61-62`).
 - `index.html:146-158` trae rejilla y etiquetas del eje ya dibujadas; `app.py`
@@ -154,10 +154,10 @@ Y hay contenedores que nacen ocultos y Python conmuta: `#sweep-panel`
 (`index.html:179`), `#simulation-results` (`index.html:67`).
 
 **INVARIANTE** — `index.html` es un contrato de `id`s. `by_id()`
-(`python/app.py:34`) es `document.getElementById` pelado: si renombras un `id`
+(`python/app.py:36`) es `document.getElementById` pelado: si renombras un `id`
 aquí, allá obtienes `None` y el fallo aparece como `AttributeError` en la
 consola de Pyodide, a veces solo cuando el usuario toca ese control.
-`set_hidden` y `set_text` (`python/app.py:48-57`) toleran el `None` en
+`set_hidden` y `set_text` (`python/app.py:50-59`) toleran el `None` en
 silencio; el resto del archivo, no. Y ningún script del repositorio comprueba
 este contrato: el único verificador es abrir el navegador.
 
@@ -308,7 +308,7 @@ Cuatro cosas que parecen ceremonia y no lo son:
    el `from geometry import …` de `python/app.py:16` explota con
    `ModuleNotFoundError`.
 2. **INVARIANTE · `run_name="__main__"`.** Es lo que hace disparar el guardia
-   `if __name__ == "__main__": main()` de `python/app.py:1240-1241`. Con un
+   `if __name__ == "__main__": main()` de `python/app.py:1353-1354`. Con un
    `import app` normal, el módulo se cargaría y `main()` no se llamaría nunca:
    la app quedaría inerte, con el overlay ya oculto y cero listeners — el modo
    de fallo más desconcertante posible, porque la pantalla se ve perfecta.
@@ -349,7 +349,7 @@ Pero leído rápido parece que se está pisando la referencia al elemento del DO
 > **Que es intocable y por que:** que **toda** función que cruce a JavaScript pase por `retain()`; sin eso el proxy se recolecta y el evento muere sin error visible.
 > **Como verificas el cambio:** `python3 scripts/smoke_ui.py` cubre el selector y los parámetros; los listeners solo se comprueban a mano en <http://localhost:8000> (crear un nodo, arrastrarlo, Shift para conectar, Simular).
 
-`python/app.py:1233-1237`, cuatro líneas:
+`python/app.py:1345-1350`, cuatro líneas:
 
 ```python
 def main() -> None:
@@ -360,8 +360,8 @@ def main() -> None:
 ```
 
 Antes de llegar ahí, la ejecución del módulo ya hizo el trabajo pesado:
-`python/app.py:13-19` importa `js` y `pyodide.ffi` (solo existen dentro de
-Pyodide), luego `geometry`, `models` y `simulation`; `python/app.py:22` crea el
+`python/app.py:13-18` importa `js` y `pyodide.ffi` (solo existen dentro de
+Pyodide), luego `geometry`, `models` y `simulation`; `python/app.py:21` crea el
 singleton `STATE = AppState()`, cuyo valor por omisión ya trae una pestaña
 `GraphTab("tab_0", "Grafo 1")` vacía (`python/models.py:91`).
 
@@ -370,11 +370,11 @@ singleton `STATE = AppState()`, cuyo valor por omisión ya trae una pestaña
 import muerto. Es lo que **registra** `fv` y `amp`. Si ese import desapareciera,
 el registro quedaría vacío y el `<select>` saldría sin opciones.
 
-### `bind_events()` (`python/app.py:1189-1230`)
+### `bind_events()` (`python/app.py:1301-1342`)
 
 **40 llamadas a `listen()`**, una por línea. `listen()`
-(`python/app.py:44-45`) es `target.addEventListener(event, retain(callback))`, y
-`retain()` (`python/app.py:38-41`) es el corazón del asunto:
+(`python/app.py:46-47`) es `target.addEventListener(event, retain(callback))`, y
+`retain()` (`python/app.py:40-43`) es el corazón del asunto:
 
 ```python
 def retain(callback: Callable):
@@ -390,11 +390,11 @@ visible**. Hay 6 apariciones de `retain(` en `app.py`:
 
 | Dónde | Línea | Cuántos proxies |
 |---|---|---|
-| Definición de `retain` | `python/app.py:38` | — |
-| Dentro de `listen()` | `python/app.py:45` | 40, uno por llamada de `bind_events()` |
-| `setTimeout` de limpieza del blob en `export_json` | `python/app.py:955` | 1 por exportación |
-| Callback de `file.text().then(…)` en `on_file_change` | `python/app.py:1001` | 1 por importación |
-| Los dos listeners del Worker en `start_sweep` | `python/app.py:1174-1175` | 2 por sweep |
+| Definición de `retain` | `python/app.py:40` | — |
+| Dentro de `listen()` | `python/app.py:47` | 40, uno por llamada de `bind_events()` |
+| `setTimeout` de limpieza del blob en `export_json` | `python/app.py:966` | 1 por exportación |
+| Callback de `file.text().then(…)` en `on_file_change` | `python/app.py:1012` | 1 por importación |
+| Los dos listeners del Worker en `start_sweep` | `python/app.py:1286-1287` | 2 por sweep |
 
 Es decir: 44 proxies como mínimo (40 + 2 del Worker + 2 puntuales), y **crecen
 sin tope**, porque los cuatro call sites que no son `bind_events()` añaden uno
@@ -411,11 +411,11 @@ agarrados sus callbacks. `retain()` no es solo para que el evento responda: es
 lo que mantiene viva a la aplicación entera.
 
 Los objetivos de los listeners son todos **contenedores estables**: `#graph-tabs`
-(delegación resuelta con `closest()` en `python/app.py:568-582`), el `<svg>` del
+(delegación resuelta con `closest()` en `python/app.py:579-593`), el `<svg>` del
 canvas, `window`, y los controles fijos de la barra lateral. Ninguno se destruye
 jamás.
 
-### `render_all()` (`python/app.py:521`)
+### `render_all()` (`python/app.py:532`)
 
 ```python
 render_tabs(); render_controls(); render_canvas(); render_json()
@@ -430,7 +430,7 @@ Este es el momento en que el HTML estático deja de existir:
 | `render_canvas` (`:231`) | Pone el `transform` de pan/zoom en las cuatro capas y escribe `innerHTML` de aristas, etiquetas y nodos (vacíos en el arranque). Termina llamando a `render_minimap()`. |
 | `render_json` (`:486`) | Escribe `#json-content` con `{"directed": true, "nodes": [], "edges": []}`. |
 
-### `fit_view()` (`python/app.py:848-851`)
+### `fit_view()` (`python/app.py:859-862`)
 
 ```python
 bounds = by_id("graph-canvas").getBoundingClientRect()
@@ -445,7 +445,7 @@ height <= 0`. Esa misma guardia es lo que salva el arranque si algún día algui
 decide ocultar `#app` durante la carga: el canvas mediría 0×0 y sin ella habría
 una división entre cero.
 
-### `window.graphSimulatorReady = True` (`python/app.py:1237`)
+### `window.graphSimulatorReady = True` (`python/app.py:1350`)
 
 Bandera para comprobaciones externas (consola, pruebas de navegador). **Nadie la
 lee dentro del repositorio**: `bootstrap.js` no la consulta, y ocultar el overlay
@@ -508,7 +508,7 @@ sequenceDiagram
 
 ## 5. El segundo runtime: `js/sweep-worker.js`
 
-> **Archivos que cubre:** `js/sweep-worker.js` (102 líneas) y el nacimiento del Worker en `python/app.py:1144-1147`.
+> **Archivos que cubre:** `js/sweep-worker.js` (102 líneas) y el nacimiento del Worker en `python/app.py:1256-1259`.
 > **Que puedes cambiar aqui:** `SWEEP_FILES`, pero solo para agregar un `.py` que el motor del barrido **necesite de verdad**.
 > **Que es intocable y por que:** que `SWEEP_FILES` tenga 6 archivos y no 9. La lista es un candado arquitectónico ejecutable, no una optimización de tamaño.
 > **Como verificas el cambio:** en <http://localhost:8000>, pestaña *Análisis de Convergencia*, con 2 puntos de p y 10 simulaciones; el gráfico debe pintarse y `#sweep-status` no debe mostrar una línea roja.
@@ -516,13 +516,13 @@ sequenceDiagram
 ### Cuándo nace
 
 No lo carga `index.html`. Lo crea **Python**, cuando el usuario pulsa
-*Ejecutar sweep*, en `start_sweep()` (`python/app.py:1125`):
+*Ejecutar sweep*, en `start_sweep()` (`python/app.py:1237`):
 
 ```python
 WORKER = Worker.new(
     "./js/sweep-worker.js",
     to_js({"type": "module"}, dict_converter=Object.fromEntries),
-)   # python/app.py:1144-1147
+)   # python/app.py:1256-1259
 ```
 
 Dos notas: la URL `./js/sweep-worker.js` se resuelve contra la **URL del
@@ -542,15 +542,15 @@ la descarga de Pyodide se solapa con el tiempo que el usuario tarda en nada. Hac
 lo mismo que `bootstrap.js` menos dos cosas: no toca el DOM (no lo tiene) y **no
 ejecuta `runpy`** — solo deja el `sys.path` listo (`js/sweep-worker.js:43-48`).
 
-Del contrato de mensajes entre el Worker y `on_message` (`python/app.py:1149`),
+Del contrato de mensajes entre el Worker y `on_message` (`python/app.py:1261`),
 qué hace `iter_sweep` con los parámetros, el estado real del botón *Detener* y
 el costo de `WORKER.terminate()`, se ocupa
 [§5 · El barrido](05-barrido-sweep.md). Aquí basta con dos hechos de arranque:
 
 - Los parámetros cruzan como **cadena JSON**
-  (`js/sweep-worker.js:76`, `JSON.stringify`), no como objeto JS: evita proxies y
+  (`js/sweep-worker.js:97`, `JSON.stringify`), no como objeto JS: evita proxies y
   problemas de vida útil de objetos entre los dos mundos.
-- `mensajeLegible()` (`js/sweep-worker.js:55-67`) se queda con la última línea del
+- `mensajeLegible()` (`js/sweep-worker.js:58-70`) se queda con la última línea del
   traceback de Python y le quita el prefijo de clase, para que `#sweep-status`
   muestre `No module named 'models'` en vez de veinte líneas de traza. Ese
   mensaje corto es, casi siempre, el síntoma de un archivo que falta en
@@ -795,7 +795,7 @@ despliegue, no solo en local.
 - **Agregar un `.py` sí toca el arranque. INVARIANTE, dos listas:**
   `PYTHON_FILES` (`js/bootstrap.js:4-14`) **siempre**; `SWEEP_FILES`
   (`js/sweep-worker.js:4-11`) solo si el motor del sweep lo necesita de verdad.
-- **INVARIANTE · `retain()`** (`python/app.py:38`): toda función que cruce a
+- **INVARIANTE · `retain()`** (`python/app.py:40`): toda función que cruce a
   JavaScript pasa por ahí, o el evento muere en silencio y la app entera se
   vuelve recolectable.
 - **INVARIANTE · el contrato de `id`s** entre `index.html` y `by_id()`. Ningún

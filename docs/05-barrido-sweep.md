@@ -97,17 +97,17 @@ aunque alguien lo intente. Todo lo que necesita saber viaja en un solo mensaje.
 
 ## 3. Lado hilo principal: `start_sweep`
 
-`python/app.py:1125`. Es corto y hace cinco cosas en orden.
+`python/app.py:1237`. Es corto y hace cinco cosas en orden.
 
 ```python
 def start_sweep(*_args) -> None:
     global WORKER
-    if not STATE.tab.nodes or STATE.sweep_running:   # app.py:1127
+    if not STATE.tab.nodes or STATE.sweep_running:   # app.py:1239
         return
-    params = {                                        # app.py:1129
+    params = {                                        # app.py:1241
         "graph": current_graph_json(),
         "algorithm": STATE.algorithm,
-        "algorithmParams": algorithm_params(),        # app.py:1134
+        "algorithmParams": algorithm_params(),        # app.py:1246
         "numPPoints": positive_int("p-points-input", 2),
         "totalSimulationsPerP": positive_int("simulations-input", 1),
         "iterations": positive_int("iterations-input", 1),
@@ -117,12 +117,12 @@ def start_sweep(*_args) -> None:
 
 Detalles que importan:
 
-- **`algorithmParams` está renombrado a propósito** (`python/app.py:1132-1134`). El dict
+- **`algorithmParams` está renombrado a propósito** (`python/app.py:1244-1246`). El dict
   exterior ya se llama `params`; anidar otro `params` dentro haría ilegible el JSON del
-  mensaje. `algorithm_params()` (`python/app.py:136`) arma el dict leyendo los *defaults*
+  mensaje. `algorithm_params()` (`python/app.py:138`) arma el dict leyendo los *defaults*
   del registro y encima lo que el usuario editó, sin conocer ningún algoritmo por nombre
   (ver [06 · Registro de algoritmos](06-registro-algoritmos.md)).
-- **`positive_int` sólo aplica el mínimo** (`python/app.py:1100-1104`). Hace
+- **`positive_int` sólo aplica el mínimo** (`python/app.py:1212-1216`). Hace
   `max(minimum, int(float(str(value))))` dentro de un `try`: un campo vacío o basura cae al
   mínimo.
   **DECISION DELIBERADA — el máximo del `<input>` (`index.html:127`, `130`, `133`, `136`)
@@ -130,20 +130,20 @@ Detalles que importan:
   viaja íntegro hasta `_prepare_sweep`, que lo rechaza. El motivo es tener **una sola fuente
   de verdad** para los rangos, y está en `sweep.py`. El precio es que los cuatro topes están
   escritos dos veces (HTML y Python) y pueden desincronizarse: ver §14, trampa 3.
-- Se llama `render_chart([])` (`python/app.py:1142`) **antes** de arrancar, para que la
+- Se llama `render_chart([])` (`python/app.py:1254`) **antes** de arrancar, para que la
   curva del sweep anterior no se quede colgada mientras el nuevo carga.
-- El Worker se crea con `{"type": "module"}` (`python/app.py:1146`) porque
+- El Worker se crea con `{"type": "module"}` (`python/app.py:1258`) porque
   `js/sweep-worker.js` usa `import` de nivel superior.
 
 ### El `postMessage` que parece una carrera y no lo es
 
-`python/app.py:1176` publica el mensaje `run` inmediatamente después de crear el Worker,
+`python/app.py:1288` publica el mensaje `run` inmediatamente después de crear el Worker,
 cuando Pyodide B ni siquiera empezó a descargarse. No es un bug: el navegador **encola**
 los mensajes hasta que el módulo del Worker termina de evaluarse y registra
-`self.onmessage` (`js/sweep-worker.js:69`). Mientras tanto,
+`self.onmessage` (`js/sweep-worker.js:120`). Mientras tanto,
 `const runtimePromise = createRuntime()` (`js/sweep-worker.js:53`) ya arrancó en el nivel
 superior del módulo, así que la descarga de Pyodide y el `fetch` de los `.py` corren en
-paralelo con el encolado. El `await runtimePromise` de `js/sweep-worker.js:75` es el punto
+paralelo con el encolado. El `await runtimePromise` de `js/sweep-worker.js:96` es el punto
 de reunión.
 
 ---
@@ -154,10 +154,10 @@ El grafo sufre **cuatro conversiones** de ida:
 
 ```
 dict de Python (Pyodide A)          GraphTab.graph_data(), models.py:71
-  --to_js(dict_converter=Object.fromEntries)-->  objeto JS      app.py:1176
+  --to_js(dict_converter=Object.fromEntries)-->  objeto JS      app.py:1288
   --structured clone del postMessage-->          objeto JS en el Worker
-  --JSON.stringify-->                            string         sweep-worker.js:76
-  --json.loads-->                                dict de Python (Pyodide B)  sweep-worker.js:85
+  --JSON.stringify-->                            string         sweep-worker.js:97
+  --json.loads-->                                dict de Python (Pyodide B)  sweep-worker.js:106
 ```
 
 **DECISION DELIBERADA — pasar por un string JSON en vez de convertir el objeto JS a Python
@@ -184,7 +184,7 @@ De vuelta cruza sólo lo que `points()` produjo: `float` y `int` **nativos de Py
 
 > **INVARIANTE — `points()` devuelve tipos nativos.** Los `float(...)` explícitos de
 > `sweep.py:236-239` no son decorativos: si quedara un `np.float64` en el dict, `to_js`
-> (`js/sweep-worker.js:95`) no sabría convertirlo y el mensaje fallaría en la frontera,
+> (`js/sweep-worker.js:116`) no sabría convertirlo y el mensaje fallaría en la frontera,
 > lejos de la causa y con un error que no menciona ni a NumPy ni a `points()`.
 
 ---
@@ -196,7 +196,7 @@ De vuelta cruza sólo lo que `points()` produjo: `float` y `int` **nativos de Py
 ```mermaid
 flowchart TD
     A["iter_sweep(graph, algorithm, params, ...)<br/>sweep.py:311"] --> B["_prepare_sweep(...)<br/>sweep.py:261"]
-    B -->|"ValueError: sube como excepcion,<br/>NO como evento"| X["JS catch en sweep-worker.js:99"]
+    B -->|"ValueError: sube como excepcion,<br/>NO como evento"| X["JS catch en sweep-worker.js:133"]
     B --> C["edge_mask (n,n) bool<br/>values (n,)<br/>probabilities (P,) = linspace(0,1,P)<br/>S = simulations_per_iteration<br/>I = total_iterations (ya recortado)<br/>R = rounds"]
     C --> D["yield start<br/>numPPoints, iterations, simsPerIteration, algorithm"]
     D --> E["SweepAccumulator(probabilities)<br/>cumulative_sum (P,)<br/>cumulative_sumsq (P,)<br/>simulations_per_p = 0"]
@@ -434,13 +434,13 @@ ci_low, ci_high = mean - 1.96*standard_error, mean + 1.96*standard_error
 > el backend. Cerca de `p ≈ 0` o `p ≈ 1` el `ciLow` puede salir **negativo** aunque una
 > discrepancia no pueda serlo. Como el SVG del panel usa `overflow: visible` (regla
 > `.sweep-chart svg` en `css/app.css`) y `render_chart` escala el eje sólo con `ciHigh` y
-> `mean` (`python/app.py:429-430`), la banda **se dibuja por debajo del eje X**. Es cosmético
+> `mean` (`python/app.py:431-432`), la banda **se dibuja por debajo del eje X**. Es cosmético
 > y es el comportamiento esperado, no un bug de dibujo: recortar cambiaría los números que la
 > línea base tiene congelados.
 
 Cada punto sale como `{"p": float, "mean": float, "ciLow": float, "ciHigh": float}` — las
-cuatro claves exactas que `render_chart` (`python/app.py:422`) y el tooltip
-(`python/app.py:469-473`) esperan.
+cuatro claves exactas que `render_chart` (`python/app.py:424`) y el tooltip
+(`python/app.py:471-475`) esperan.
 
 ---
 
@@ -489,7 +489,7 @@ Tres cosas que **no** cambiaron y hay que saber:
    `sweep.py:276-278`) y `S ≤ total` siempre, `total // S ≥ 1`. El stream siempre emite al
    menos un evento `iteration`.
 3. **El evento `start` reporta el conteo ya recortado** (`sweep.py:364`), así que el
-   "Iteración k/N" que ve el usuario (`python/app.py:1158`) es honesto.
+   "Iteración k/N" que ve el usuario (`python/app.py:1270`) es honesto.
 
 Esta invariante está cubierta por el arnés: `scripts/equivalencia.py:327-343` corre diez
 combinaciones y registra explícitamente el campo `excedeLoPedido`. Cambiar el reparto
@@ -505,7 +505,7 @@ cambia la línea base; ver [07 · Verificación](07-verificacion.md) antes de to
 stateDiagram-v2
     [*] --> Validando: iter_sweep(...) y primer next()
     Validando --> ExcepcionCruda: _prepare_sweep lanza ValueError
-    ExcepcionCruda --> [*]: NO es evento.<br/>Sube por runPythonAsync,<br/>lo atrapa el catch de sweep-worker.js:99<br/>y se publica como type=error del Worker
+    ExcepcionCruda --> [*]: NO es evento.<br/>Sube por runPythonAsync,<br/>lo atrapa el catch de sweep-worker.js:133<br/>y se publica como type=error del Worker
     Validando --> Start: yield start
     Start --> Iteration: pasada completa sobre los P puntos
     Iteration --> Iteration: siguiente iteracion
@@ -535,30 +535,30 @@ stateDiagram-v2
 > en el primer `next()` del generador, antes del `yield start`, y su `ValueError` no está
 > dentro del `try` (que empieza en `sweep.py:371`). Se valida así de temprano a propósito
 > —el comentario de `sweep.py:271-272` lo dice— para dar el mensaje correcto antes de anunciar
-> nada. Sube hasta `runPythonAsync`, y el `catch` de `js/sweep-worker.js:99-101` lo convierte
+> nada. Sube hasta `runPythonAsync`, y el `catch` de `js/sweep-worker.js:133-135` lo convierte
 > en `{type:"error", message}` **del Worker**, no del stream. `mensajeLegible`
-> (`js/sweep-worker.js:55-67`) se queda con la última línea del traceback de Python y le
+> (`js/sweep-worker.js:58-70`) se queda con la última línea del traceback de Python y le
 > quita el prefijo `ValueError:`, porque mostrarle un traceback completo de Pyodide a alguien
 > que sólo escribió mal un número no ayuda a nadie.
 
-### Cómo consume la UI cada evento (`python/app.py:1149-1172`)
+### Cómo consume la UI cada evento (`python/app.py:1261-1284`)
 
 | Evento | Rama | Qué hace |
 |---|---|---|
-| `iteration` | `app.py:1153-1160` | `render_chart(points)` + texto `Iteración k/N — m sims/p` |
-| `end` (lo emite el Worker, `sweep-worker.js:98`) | `app.py:1161-1162` | `finish_sweep()` |
-| `error` | `app.py:1163-1165` | pinta el mensaje escapado y `finish_sweep()` |
-| `start` | `app.py:1166` | **cae en la rama y no hace nada** |
+| `iteration` | `app.py:1265-1272` | `render_chart(points)` + texto `Iteración k/N — m sims/p` |
+| `end` (lo emite el Worker, `sweep-worker.js:132`) | `app.py:1273-1274` | `finish_sweep()` |
+| `error` | `app.py:1275-1277` | pinta el mensaje escapado y `finish_sweep()` |
+| `start` | `app.py:1278` | **cae en la rama y no hace nada** |
 | `cancelled` | — | **no hay rama**; se ignora (hoy es inalcanzable, §11) |
 
 > **DEUDA CONOCIDA — dos rarezas de `on_message` que no debes "limpiar" sin leer esto:**
 >
-> 1. **La rama `"loading"` es código muerto.** `app.py:1166-1168` espera un evento
+> 1. **La rama `"loading"` es código muerto.** `app.py:1278-1280` espera un evento
 >    `{type:"loading"}` que **ningún emisor produce**: `js/sweep-worker.js` sólo publica los
 >    eventos de `iter_sweep`, `end` y `error`. Su mensaje "Cargando Python y NumPy en el
 >    worker…" nunca se ve.
 > 2. **Como `start` no cambia el texto**, el usuario ve "Cargando motor Python del sweep…"
->    (`app.py:1143`) durante *toda la primera iteración*, no sólo durante la carga. En
+>    (`app.py:1255`) durante *toda la primera iteración*, no sólo durante la carga. En
 >    grafos grandes eso puede ser mucho tiempo aparentando que sigue cargando. Si alguien va
 >    a mejorar la UX del sweep, éste es el arreglo de una línea con más impacto: escribir el
 >    estado en la rama `start`.
@@ -575,25 +575,25 @@ qué está así.
 ### El que se usa: matar el Worker
 
 ```python
-def stop_sweep(*_args) -> None:          # python/app.py:1114
+def stop_sweep(*_args) -> None:          # python/app.py:1226
     global WORKER
     if WORKER is not None:
-        WORKER.terminate()               # python/app.py:1117
+        WORKER.terminate()               # python/app.py:1229
         WORKER = None
     ...
 ```
 
 > **DECISION DELIBERADA — terminar el Worker en vez de mandarle un mensaje.** El Worker está
 > ejecutando `await pyodide.runPythonAsync(...)` con un `for` **síncrono** dentro
-> (`js/sweep-worker.js:86-95`). Mientras Python corre, el bucle de eventos del Worker está
+> (`js/sweep-worker.js:107-116`). Mientras Python corre, el bucle de eventos del Worker está
 > bloqueado: un `postMessage({type:"cancel"})` se quedaría en la cola hasta que el barrido
 > terminara solo — es decir, la cancelación llegaría justo cuando ya no hace falta.
 > `Worker.terminate()` no requiere cooperación: mata el hilo en el acto.
 
 El precio: **se destruye Pyodide B completo**. El siguiente sweep vuelve a descargar
 Pyodide, `loadPackage("numpy")` y los seis `.py` (`js/sweep-worker.js:4-11`, con
-`cache: "no-store"` en la línea 15). Y ojo: `finish_sweep()` (`python/app.py:1179-1183`)
-**también** llama a `terminate()` al terminar normalmente (`app.py:1182`), así que *cada
+`cache: "no-store"` en la línea 15). Y ojo: `finish_sweep()` (`python/app.py:1291-1295`)
+**también** llama a `terminate()` al terminar normalmente (`app.py:1294`), así que *cada
 ejecución del sweep paga el arranque del runtime desde cero* — y depende de la red, no sólo
 en la primera carga de la página. Es una decisión consciente a favor de la simplicidad y de
 no dejar memoria colgada; si algún día el arranque molesta, el cambio es reusar el Worker
@@ -616,7 +616,7 @@ y si lo obtenido es a su vez callable, lo invoca (`sweep.py:75`). `_check_cancel
 iteración (`sweep.py:373`), antes de cada punto de `p` (`sweep.py:375`) y antes de cada
 ronda batched (`sweep.py:160`).
 
-**Nada de esto se usa hoy.** `js/sweep-worker.js:86-94` llama a `iter_sweep` **sin** el
+**Nada de esto se usa hoy.** `js/sweep-worker.js:107-115` llama a `iter_sweep` **sin** el
 argumento `cancel`, así que `cancel is None` y `is_cancelled` siempre devuelve `False`. La
 consecuencia práctica: el evento `cancelled` **no puede ocurrir** en la aplicación actual, y
 por eso `on_message` no tiene rama para él sin que se note.
@@ -641,7 +641,7 @@ puede vivir perfectamente sólo con `scalar` + `updated` y funcionar en el edito
 La cadena completa cuando falta:
 
 1. **DEUDA CONOCIDA — el selector lo ofrece igual.** `render_algorithm_options`
-   (`python/app.py:151-154`) recorre `registry.specs()`, que devuelve *todos* los
+   (`python/app.py:153-156`) recorre `registry.specs()`, que devuelve *todos* los
    registrados, y **no filtra por `batch`**. El usuario puede seleccionar un algoritmo sólo
    escalar y darle a "Ejecutar sweep". Está mitigado —no arreglado— por el mensaje de error
    del paso 3.
@@ -656,9 +656,9 @@ La cadena completa cuando falta:
    Esa segunda frase es la que importa: le dice al usuario que su algoritmo *sí* está bien
    registrado, y que el editor lo va a correr. Los dos textos están congelados en la línea
    base (`scripts/equivalencia.py:363-368`).
-4. La excepción sube (es antes del `try`), la atrapa `js/sweep-worker.js:99`,
+4. La excepción sube (es antes del `try`), la atrapa `js/sweep-worker.js:133`,
    `mensajeLegible` le quita el `ValueError:` y llega a `#sweep-status` dentro de un
-   `<p class="sweep-error">` (`python/app.py:1164`).
+   `<p class="sweep-error">` (`python/app.py:1276`).
 
 > **DEUDA CONOCIDA — la clase `sweep-error` no tiene ninguna regla CSS.** No existe en
 > `css/app.css` ni en `index.html`: el mensaje de error se pinta con el color normal de la
@@ -680,23 +680,23 @@ arnés no lo cubrirá** hasta que se añada a la tupla `ALGORITMOS` de
 
 ## 13. Vuelta al hilo principal: `render_chart`
 
-`python/app.py:422`. Recibe la lista de `P` dicts y dibuja dos `path` de SVG en un
+`python/app.py:424`. Recibe la lista de `P` dicts y dibuja dos `path` de SVG en un
 `viewBox` fijo de `400 × 320` (`index.html:143`).
 
 ```python
-left, right, top, bottom = 44.0, 382.0, 25.0, 293.0    # app.py:426
-max_y, divisions = nice_axis(max(ciHigh + mean))       # app.py:429-430
-x_coord(p)     = left + clamp(p,0,1) * (right - left)  # app.py:441-442  ← p SÍ se recorta
-y_coord(value) = bottom - (value / max_y)*(bottom-top) # app.py:444-445  ← el valor NO
+left, right, top, bottom = 44.0, 382.0, 25.0, 293.0    # app.py:428
+max_y, divisions = nice_axis(max(ciHigh + mean))       # app.py:431-432
+x_coord(p)     = left + clamp(p,0,1) * (right - left)  # app.py:443-444  ← p SÍ se recorta
+y_coord(value) = bottom - (value / max_y)*(bottom-top) # app.py:446-447  ← el valor NO
 ```
 
-- `nice_axis` (`python/app.py:349`) elige un tope de la forma `{1, 2, 2.5, 5} × 10^k` para
+- `nice_axis` (`python/app.py:351`) elige un tope de la forma `{1, 2, 2.5, 5} × 10^k` para
   que las marcas caigan en números redondos. El tope siempre cubre el dato, así que la
   **media** nunca se sale; el `ciLow` negativo sí, como se explicó en §8.
 - La banda de confianza es **un solo `path` cerrado**: los `ciHigh` de izquierda a derecha
-  concatenados con los `ciLow` de derecha a izquierda, más `Z` (`python/app.py:451-453`).
-- `CHART_POINTS` se guarda global (`python/app.py:423-424`) para que el tooltip de
-  `on_chart_pointer_move` (`python/app.py:458`) pueda buscar el punto más cercano al cursor
+  concatenados con los `ciLow` de derecha a izquierda, más `Z` (`python/app.py:453-455`).
+- `CHART_POINTS` se guarda global (`python/app.py:425-426`) para que el tooltip de
+  `on_chart_pointer_move` (`python/app.py:460`) pueda buscar el punto más cercano al cursor
   sin volver a pedirle nada al Worker.
 - **DECISION DELIBERADA — cada evento `iteration` redibuja la curva entera**, no la parcha.
   Con `P = 201` y 50 iteraciones son 50 reconstrucciones de dos strings de ~200 coordenadas:
@@ -728,17 +728,17 @@ y_coord(value) = bottom - (value / max_y)*(bottom-top) # app.py:444-445  ← el 
    eventos y no vea el error ahí, está mirando el lado equivocado de la frontera. §10.
 5. **INVARIANTE · `points()` debe devolver tipos nativos.** Los `float(...)` de
    `sweep.py:236-239` no son decorativos: un `np.float64` colado rompe `to_js`
-   (`sweep-worker.js:95`) en la frontera, con un error que no menciona ni a NumPy ni a
+   (`sweep-worker.js:116`) en la frontera, con un error que no menciona ni a NumPy ni a
    `points()`.
 6. **INVARIANTE · `add()` no avanza el contador; `finish_iteration()` sí.** Meter el
    `finish_iteration` dentro del bucle de `p` multiplicaría `simulations_per_p` por `P` y
    hundiría toda la curva. Es un error de una línea con consecuencias silenciosas. §8.
 7. **DECISION DELIBERADA · cada sweep destruye y recrea Pyodide B.** `finish_sweep`
-   (`app.py:1182`) llama a `terminate()` igual que `stop_sweep` (`app.py:1117`). Ejecutar el
+   (`app.py:1294`) llama a `terminate()` igual que `stop_sweep` (`app.py:1229`). Ejecutar el
    sweep diez veces paga diez arranques de Pyodide + NumPy, con red incluida. §11.
 8. **DEUDA CONOCIDA · `PROXIES` sólo crece.** `start_sweep` registra dos `create_proxy`
-   nuevos por ejecución (`app.py:1174-1175`) en una lista global que nunca se vacía, así que
-   cada barrido filtra dos proxies de forma permanente. El mecanismo (`retain`, `app.py:38-41`)
+   nuevos por ejecución (`app.py:1286-1287`) en una lista global que nunca se vacía, así que
+   cada barrido filtra dos proxies de forma permanente. El mecanismo (`retain`, `app.py:40-43`)
    y por qué la fuga se tolera están en [03 · La capa de interfaz](03-interfaz.md).
 9. **DEUDA CONOCIDA · la rama `"loading"` de `on_message` es inalcanzable** y `start` no
    actualiza el texto de estado: el usuario ve "Cargando motor Python del sweep…" durante

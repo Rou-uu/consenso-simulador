@@ -15,7 +15,8 @@ from pyodide.ffi import create_proxy, to_js
 
 from geometry import edge_geometry, fit_transform, has_reverse, node_center, value_color
 from models import AppState, Edge, GraphTab, Node, SimulationState
-from simulation import registry
+from simulation.algoritmos import ALGORITMOS
+from simulation.usuario import CLAVE as CLAVE_USUARIO
 
 
 STATE = AppState()
@@ -40,27 +41,15 @@ CHART_POINTS: list[dict[str, float]] = []
 CHART_MAX_Y = 1.0
 
 
-def _solo_en_el_worker(*_args, **_kwargs):
-    """Placeholder de la ranura de usuario: en el hilo principal no corre nada."""
-
-    raise RuntimeError(
-        "El algoritmo propio se compila y corre dentro del Worker, no aquí."
-    )
+# La ranura del algoritmo propio sale en el selector junto a los de casa, pero
+# su código solo existe dentro del Worker (`simulation.usuario`).
+RANURA_USUARIO = {"nombre": "Algoritmo propio…"}
 
 
-# La ranura aparece en el selector como un algoritmo más porque **es** una
-# entrada del registro. En el hilo principal el registro ya no ejecuta nada: es
-# el catálogo desde el que la interfaz arma sus controles. El código de verdad
-# vive en el Worker, que lo instala con `simulation.usuario` (docs/09 §A.12).
-registry.register(
-    registry.AlgorithmSpec(
-        key=registry.CLAVE_USUARIO,
-        label="Algoritmo propio…",
-        scalar=_solo_en_el_worker,
-        updated=_solo_en_el_worker,
-        batch=_solo_en_el_worker,
-    )
-)
+def algoritmo_activo() -> dict[str, Any]:
+    if STATE.algorithm == CLAVE_USUARIO:
+        return RANURA_USUARIO
+    return ALGORITMOS[STATE.algorithm]
 
 
 def by_id(element_id: str):
@@ -168,21 +157,20 @@ def current_graph_json() -> dict[str, Any]:
 def algorithm_params() -> dict[str, Any]:
     """Parámetros propios del algoritmo activo, en el formato que espera el motor.
 
-    Los toma del registro (defaults) y del estado (lo que el usuario editó). No
+    Los toma de `ALGORITMOS` (valores por omisión) y del estado (lo que el usuario editó). No
     conoce ningún algoritmo por nombre.
     """
-    spec = registry.get(STATE.algorithm)
-    guardados = STATE.algorithm_params.setdefault(STATE.algorithm, spec.defaults())
-    for param in spec.params:
-        guardados.setdefault(param.name, param.default)
+    guardados = STATE.algorithm_params.setdefault(STATE.algorithm, {})
+    for nombre, (_, por_omision) in algoritmo_activo().get("parametros", {}).items():
+        guardados.setdefault(nombre, por_omision)
     return dict(guardados)
 
 
 def render_algorithm_options() -> None:
     """Puebla el selector con los algoritmos registrados."""
     opciones = "".join(
-        f'<option value="{html.escape(spec.key)}">{html.escape(spec.label)}</option>'
-        for spec in registry.specs()
+        f'<option value="{html.escape(clave)}">{html.escape(algoritmo["nombre"])}</option>'
+        for clave, algoritmo in [*ALGORITMOS.items(), (CLAVE_USUARIO, RANURA_USUARIO)]
     )
     select = by_id("algorithm-select")
     if select.innerHTML != opciones:
@@ -198,7 +186,7 @@ def render_user_code() -> None:
     plantilla inicial es el contenido del elemento en ``index.html``.
     """
 
-    propio = STATE.algorithm == registry.CLAVE_USUARIO
+    propio = STATE.algorithm == CLAVE_USUARIO
     set_hidden("user-algorithm", not propio)
     if propio and not STATE.user_source:
         STATE.user_source = str(by_id("user-code").value)
@@ -221,7 +209,7 @@ def clear_user_code_error() -> None:
 def user_source() -> str | None:
     """El fuente que debe viajar en el mensaje, o ``None`` si no aplica."""
 
-    if STATE.algorithm != registry.CLAVE_USUARIO:
+    if STATE.algorithm != CLAVE_USUARIO:
         return None
     return STATE.user_source or str(by_id("user-code").value)
 
@@ -232,24 +220,24 @@ def render_algorithm_params() -> None:
     Solo reconstruye el marcado cuando cambia el algoritmo: regenerarlo en cada
     render pisaría lo que el usuario está escribiendo y le quitaría el foco al
     campo. Las etiquetas se insertan como HTML a propósito (vienen de
-    ``algorithms.py``, que es código del proyecto) para poder usar ``<code>``.
+    ``algoritmos.py``, que es código del proyecto) para poder usar ``<code>``.
     """
     contenedor = by_id("algorithm-params")
     if str(contenedor.getAttribute("data-algorithm") or "") == STATE.algorithm:
         return
 
-    spec = registry.get(STATE.algorithm)
+    parametros = algoritmo_activo().get("parametros", {})
     valores = algorithm_params()
     campos = "".join(
-        f'<label class="field-label" for="param-{html.escape(param.name)}">{param.label}</label>'
-        f'<input id="param-{html.escape(param.name)}" class="agreed-input" type="number" '
-        f'step="{html.escape(param.step)}" value="{html.escape(str(valores[param.name]))}" '
-        f'data-param="{html.escape(param.name)}" />'
-        for param in spec.params
+        f'<label class="field-label" for="param-{html.escape(nombre)}">{etiqueta}</label>'
+        f'<input id="param-{html.escape(nombre)}" class="agreed-input" type="number" '
+        f'step="any" value="{html.escape(str(valores[nombre]))}" '
+        f'data-param="{html.escape(nombre)}" />'
+        for nombre, (etiqueta, _) in parametros.items()
     )
     contenedor.innerHTML = campos
     contenedor.setAttribute("data-algorithm", STATE.algorithm)
-    contenedor.hidden = not spec.params
+    contenedor.hidden = not parametros
 
 
 def graph_snapshot(tab: GraphTab | None = None) -> GraphTab:
@@ -1250,7 +1238,7 @@ def on_round_timeout() -> None:
         f"El algoritmo no terminó en {segundos} s y se detuvo el motor.\n"
         "Suele ser un ciclo que no cierra."
     )
-    if STATE.algorithm == registry.CLAVE_USUARIO:
+    if STATE.algorithm == CLAVE_USUARIO:
         show_user_code_error(mensaje)
     else:
         notify(mensaje)

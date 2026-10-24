@@ -143,7 +143,7 @@ class FakeWorker:
 
         import json as _json
 
-        from simulation.engine import run_round
+        from simulation.ronda import run_round
 
         params = self.enviados.pop()["params"]
         resultado = run_round(
@@ -186,7 +186,9 @@ DOCUMENTO = instalar_dobles()
 
 import app  # noqa: E402  (requiere los dobles ya instalados)
 from models import Edge, Node  # noqa: E402
-from simulation import registry, usuario  # noqa: E402
+from simulation import usuario  # noqa: E402
+from simulation.algoritmos import ALGORITMOS  # noqa: E402
+from simulation.ronda import run_round  # noqa: E402
 
 
 # ==========================================================================
@@ -230,12 +232,12 @@ print("1. El selector se puebla desde el registro")
 cambiar_algoritmo("fv")
 opciones = opciones_del_selector()
 comprobar(
-    [clave for clave, _ in opciones] == list(registry.KEYS),
-    f"opciones == algoritmos registrados: {[c for c, _ in opciones]}",
+    [clave for clave, _ in opciones] == [*ALGORITMOS, usuario.CLAVE],
+    f"opciones == ALGORITMOS + la ranura propia: {[c for c, _ in opciones]}",
 )
 comprobar(
-    dict(opciones).get("amp") == registry.get("amp").label,
-    "la etiqueta visible sale del spec, no de index.html",
+    dict(opciones).get("amp") == ALGORITMOS["amp"]["nombre"],
+    "la etiqueta visible sale de ALGORITMOS, no de index.html",
 )
 comprobar(
     DOCUMENTO.getElementById("algorithm-select").value == "fv",
@@ -280,19 +282,11 @@ comprobar(
 )
 
 print("\n5. Un algoritmo nuevo aparece solo")
-registry.register(
-    registry.AlgorithmSpec(
-        key="zz",
-        label="Algoritmo de prueba",
-        scalar=lambda *a, **k: [],
-        updated=lambda *a, **k: False,
-        batch=None,
-        params=(
-            registry.ParamSpec(name="alfa", label="Alfa", default=2.5),
-            registry.ParamSpec(name="beta", label="Beta", default=7.0),
-        ),
-    )
-)
+ALGORITMOS["zz"] = {
+    "nombre": "Algoritmo de prueba",
+    "ronda": lambda *a: [],
+    "parametros": {"alfa": ("Alfa", 2.5), "beta": ("Beta", 7.0)},
+}
 cambiar_algoritmo("zz")
 comprobar("zz" in [clave for clave, _ in opciones_del_selector()], "aparece en el selector")
 comprobar(campos_de_parametros() == ["alfa", "beta"], "aparecen sus dos campos")
@@ -402,35 +396,39 @@ comprobar(
 comprobar(app.STATE.round_before is None, "el embudo suelta el snapshot que esperaba")
 
 print("\n8. La ranura de código propio")
-# En producción hay DOS registros: el del hilo principal, que es el catálogo del
-# que la interfaz saca sus controles, y el del Worker, donde `usuario.instalar`
-# compila de verdad. Aquí comparten proceso, así que el bloque del instalador se
-# hace sobre una copia y se restaura: si no, vaciar la ranura al probar un
-# fallo dejaría a la interfaz sin la entrada que su selector espera —un choque
-# que la aplicación real no puede tener.
-CATALOGO_DE_LA_INTERFAZ = dict(registry.REGISTRY)
+# En producción hay DOS copias de `ALGORITMOS`: la del hilo principal, catálogo del
+# que la interfaz saca sus controles, y la del Worker, donde `usuario.instalar`
+# compila de verdad. Aquí comparten proceso y el mismo `ALGORITMOS`, así que el
+# bloque del instalador trabaja sobre una copia y se restaura: si no, la ranura
+# instalada aparecería dos veces en el selector, algo que la app real no puede tener.
+CATALOGO_DE_LA_INTERFAZ = dict(ALGORITMOS)
 
 CODIGO = """
-def regla(matrix, values, messages, params=None, *, rng=None):
-    return [(native_scalar(v), None) for v in values]
+def regla(matrix, values, messages, params):
+    return [(v, None) for v in values]
 
-register(AlgorithmSpec(key="fv", label="Intento de pirata", scalar=regla))
+ALGORITMO = {"nombre": "Intento de pirata", "ronda": regla}
 """
-spec = usuario.instalar(CODIGO)
-comprobar(spec.key == registry.CLAVE_USUARIO, "la clave se fuerza: pedía `fv` y quedó en la ranura")
-comprobar(registry.get("fv").label == "Flip Value (FV)", "`fv` sigue siendo el de casa")
-comprobar(spec.label == "Intento de pirata", "la etiqueta sí es la suya: sale en los mensajes de error")
-comprobar(
-    spec.updated is usuario.actualizado_por_defecto,
-    "sin declarar `updated`, se usa «el valor del target cambió»",
+propio = usuario.instalar(CODIGO)
+comprobar(ALGORITMOS.get(usuario.CLAVE) is propio, "queda en la ranura `user_alg`, no en otra clave")
+comprobar(ALGORITMOS["fv"]["nombre"] == "Flip Value (FV)", "`fv` sigue siendo el de casa")
+comprobar(propio["nombre"] == "Intento de pirata", "el nombre sí es el suyo: sale en los mensajes de error")
+comprobar("batch" not in propio, "sin `batch`: el sweep lo correrá con el bucle ingenuo")
+ronda = run_round(
+    {"directed": True, "nodes": [{"id": "a", "value": 1}, {"id": "b", "value": 0}],
+     "edges": [{"id": "e", "source": "a", "target": "b", "weight": "1"}]},
+    algorithm=usuario.CLAVE,
 )
-comprobar(spec.batch is None, "sin `batch`, el barrido lo rechazará explicándolo")
+comprobar(
+    ronda["values"] == [1.0, 0.0] and ronda["propagation"][0]["updated_value"] is False,
+    "corre en una ronda real; sin `actualizo` usa «el valor del target cambió»",
+)
 
 for descripcion, fuente, esperado in [
     ("no compila", "def roto(:", SyntaxError),
-    ("no registra nada", "x = 1", ValueError),
+    ("no define ALGORITMO", "x = 1", ValueError),
     ("revienta al ejecutarse", "1 / 0", ZeroDivisionError),
-    ("declara parámetros", 'register(AlgorithmSpec(scalar=lambda *a, **k: [], params=(ParamSpec(name="p", label="P", default=1),)))', ValueError),
+    ("declara parámetros", 'ALGORITMO = {"ronda": print, "parametros": {"p": ("P", 1)}}', ValueError),
 ]:
     try:
         usuario.instalar(fuente)
@@ -441,15 +439,15 @@ for descripcion, fuente, esperado in [
         comprobar(False, f"{descripcion}: esperaba {esperado.__name__}, llegó {type(error).__name__}")
 
 comprobar(
-    registry.CLAVE_USUARIO not in registry.KEYS,
+    usuario.CLAVE not in ALGORITMOS,
     "tras una instalación fallida la ranura queda VACÍA, no con el código anterior",
 )
 
-registry.REGISTRY.clear()
-registry.REGISTRY.update(CATALOGO_DE_LA_INTERFAZ)
+ALGORITMOS.clear()
+ALGORITMOS.update(CATALOGO_DE_LA_INTERFAZ)
 
 # --- la mitad de interfaz ---
-app.STATE.algorithm = registry.CLAVE_USUARIO
+app.STATE.algorithm = usuario.CLAVE
 app.STATE.user_source = ""
 DOCUMENTO.getElementById("user-code").value = "# plantilla de index.html"
 app.render_user_code()
@@ -466,7 +464,7 @@ comprobar(app.user_source() is None, "con un algoritmo de casa no viaja ningún 
 app.render_user_code()
 comprobar(DOCUMENTO.getElementById("user-algorithm").hidden, "y la caja se esconde")
 
-app.STATE.algorithm = registry.CLAVE_USUARIO
+app.STATE.algorithm = usuario.CLAVE
 app.simulate()
 comprobar(
     worker.enviados[-1]["params"].get("fuente") == "# lo que escribí",

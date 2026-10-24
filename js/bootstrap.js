@@ -6,12 +6,8 @@ const PYTHON_FILES = [
   "python/models.py",
   "python/geometry.py",
   "python/simulation/__init__.py",
-  "python/simulation/registry.py",
-  "python/simulation/rng.py",
-  "python/simulation/algorithms.py",
+  "python/simulation/algoritmos.py",
   "python/simulation/usuario.py",
-  "python/simulation/engine.py",
-  "python/simulation/sweep.py",
 ];
 
 const loader = document.getElementById("python-loader");

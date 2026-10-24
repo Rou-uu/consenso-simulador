@@ -47,11 +47,10 @@ consenso-simulador/
 │   ├── models.py              # Nodos, aristas, pestañas y simulación
 │   ├── geometry.py            # Color, curvas, intersecciones y fit-view
 │   └── simulation/
-│       ├── algorithms.py      # Algoritmos de consenso ← se edita para agregar uno
-│       ├── registry.py        # Registro que alimenta motor, sweep e interfaz
-│       ├── rng.py             # Muestreo aleatorio compartido
-│       ├── engine.py          # Port del motor Python de back/api.py
-│       └── sweep.py           # Barrido NumPy progresivo
+│       ├── algoritmos.py      # fv, amp y ALGORITMOS ← se edita para agregar uno
+│       ├── ronda.py           # Una ronda: POST /simulate de back/api.py
+│       ├── barrido.py         # El sweep: POST /simulate/sweep de back/api.py
+│       └── usuario.py         # El algoritmo que pega quien usa la app
 ├── scripts/
 │   ├── serve.py               # Servidor HTTP estático para desarrollo
 │   ├── equivalencia.py        # Arnés de equivalencia del motor

@@ -58,8 +58,8 @@
             <h2 id="simulation-heading">Simulación</h2>
             <div class="algorithm-selector">
               <label class="field-label" for="algorithm-select">Algoritmo</label>
-              <!-- Opciones y campos de parámetros los genera app.py desde el
-                   registro de algoritmos. Agregar un algoritmo no toca este archivo. -->
+              <!-- Opciones y campos de parámetros los genera app.py desde
+                   ALGORITMOS (python/simulation/algoritmos.py). Agregar un algoritmo no toca este archivo. -->
               <select id="algorithm-select" class="algorithm-select"></select>
               <div id="algorithm-params" class="agreed-input-wrapper" hidden></div>
             </div>
@@ -69,31 +69,26 @@
               <label class="field-label" for="user-code">Tu algoritmo</label>
               <textarea id="user-code" class="user-code" spellcheck="false" rows="16" aria-describedby="user-code-hint">
 # Cada nodo que recibió mensajes adopta el promedio de lo que le llegó.
-# La firma es fija: estos cinco argumentos, siempre.
 PESO = 1.0    # las constantes van aquí: la interfaz aún no edita parámetros
 
-def promedio(matrix, values, messages, params=None, *, rng=None):
+def promedio(matrix, values, messages, params):
     nuevos = []
     # OJO: messages[target, source] viene transpuesta.
     for objetivo, recibidos in enumerate(messages):
         emisores = np.where(recibidos != 0)[0]
         if len(emisores) == 0:
-            nuevos.append((native_scalar(values[objetivo]), None))
+            nuevos.append((values[objetivo], None))
         else:
-            nuevos.append((PESO * float(np.mean(values[emisores])), None))
+            nuevos.append((PESO * np.mean(values[emisores]), None))
     return nuevos
 
 
-register(AlgorithmSpec(
-    label="Promedio de lo recibido",
-    scalar=promedio,
-))
+ALGORITMO = {"nombre": "Promedio de lo recibido", "ronda": promedio}
 </textarea>
               <p id="user-code-hint" class="user-code-hint">
-                Se compila al pulsar «Simular». Tienes <code>np</code>,
-                <code>native_scalar</code>, <code>random_array</code> y
-                <code>random_index</code>. Agrega <code>batch=</code> para que
-                sirva también en el barrido.
+                Se compila al pulsar «Simular». Tienes <code>np</code>. Las
+                claves son las mismas que en <code>algoritmos.py</code>; agrega
+                <code>"batch"</code> para que el barrido sea rápido.
               </p>
               <pre id="user-code-error" class="user-code-error" hidden></pre>
             </div>

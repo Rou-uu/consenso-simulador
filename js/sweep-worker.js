@@ -3,12 +3,10 @@ import { loadPyodide } from "https://cdn.jsdelivr.net/pyodide/v314.0.2/full/pyod
 const PYODIDE_INDEX_URL = "https://cdn.jsdelivr.net/pyodide/v314.0.2/full/";
 const SWEEP_FILES = [
   "python/simulation/__init__.py",
-  "python/simulation/registry.py",
-  "python/simulation/rng.py",
-  "python/simulation/algorithms.py",
+  "python/simulation/algoritmos.py",
+  "python/simulation/ronda.py",
+  "python/simulation/barrido.py",
   "python/simulation/usuario.py",
-  "python/simulation/engine.py",
-  "python/simulation/sweep.py",
 ];
 
 async function fetchPythonFile(sourcePath) {
@@ -101,7 +99,7 @@ async function correrRonda(datos) {
   return await pyodide.runPythonAsync(`
 import json
 
-from simulation.engine import run_round
+from simulation.ronda import run_round
 
 _params = json.loads(_ronda_params_json)
 json.dumps(
@@ -123,7 +121,7 @@ import json
 
 from js import Object, postMessage
 from pyodide.ffi import to_js
-from simulation.sweep import iter_sweep
+from simulation.barrido import iter_sweep
 
 _params = json.loads(_sweep_params_json)
 for _message in iter_sweep(

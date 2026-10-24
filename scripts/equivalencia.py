@@ -38,17 +38,16 @@ sys.path.insert(0, str(PROJECT_ROOT / "python"))
 
 import numpy as np  # noqa: E402
 
-from simulation.engine import (  # noqa: E402
+from simulation.algoritmos import ALGORITMOS as MOTOR  # noqa: E402
+from simulation.barrido import iter_sweep, round_batch  # noqa: E402
+from simulation.ronda import (  # noqa: E402
     get_adj,
     get_values,
     run_round,
-    run_simulation,
     simulate_graph,
     update_graph_data,
     who_gets_message,
 )
-from simulation import registry
-from simulation.sweep import iter_sweep, round_batch  # noqa: E402
 
 
 BASELINE_PATH = PROJECT_ROOT / "scripts" / "equivalencia_baseline.json"
@@ -75,15 +74,10 @@ def llamar_simulate_graph(grafo, algoritmo, agreed):
     return simulate_graph(grafo, algorithm=algoritmo, params=_params(agreed))
 
 
-def llamar_run_simulation(grafo, algoritmo, agreed, rondas):
-    return run_simulation(
-        grafo, algorithm=algoritmo, params=_params(agreed), rounds=rondas
-    )
-
-
 def llamar_round_batch(matriz, valores, dirigido, algoritmo, sims, rondas, agreed):
     return round_batch(
-        algoritmo, matriz, valores, dirigido, sims, times=rondas, params=_params(agreed)
+        MOTOR[algoritmo]["batch"], matriz, valores, dirigido, sims,
+        times=rondas, params=_params(agreed),
     )
 
 
@@ -97,7 +91,7 @@ def llamar_run_round_sin_params(grafo, algoritmo):
 
 
 def llamar_round_batch_sin_params(matriz, valores, dirigido, algoritmo, sims, rondas):
-    return round_batch(algoritmo, matriz, valores, dirigido, sims, times=rondas)
+    return round_batch(MOTOR[algoritmo]["batch"], matriz, valores, dirigido, sims, times=rondas)
 
 
 def llamar_iter_sweep(grafo, algoritmo, agreed, puntos, sims, iteraciones, rondas):
@@ -110,6 +104,14 @@ def llamar_iter_sweep(grafo, algoritmo, agreed, puntos, sims, iteraciones, ronda
         iterations=iteraciones,
         rounds=rondas,
     )
+
+
+def registrar_solo_escalar():
+    """Un algoritmo sin `batch`: FV sin su versión vectorizada.
+
+    El sweep debe correrlo simulación por simulación (el respaldo ingenuo).
+    """
+    MOTOR["solo_escalar"] = {"nombre": "Solo escalar", "ronda": MOTOR["fv"]["ronda"]}
 
 
 # ==========================================================================
@@ -261,17 +263,6 @@ def capturar() -> dict[str, Any]:
                 llamar_simulate_graph(grafo, algoritmo, 0.5)
             )
 
-    # --- varias rondas encadenadas ---
-    for nombre, grafo in GRAFOS.items():
-        if not grafo["nodes"]:
-            continue
-        for algoritmo in ALGORITMOS:
-            for rondas in (0, 1, 3):
-                np.random.seed(5)
-                resultado[f"run_simulation/{nombre}/{algoritmo}/r{rondas}"] = _nativo(
-                    llamar_run_simulation(grafo, algoritmo, 0.5, rondas)
-                )
-
     # --- motor batched del sweep ---
     for nombre, grafo in GRAFOS.items():
         matriz = get_adj(grafo)
@@ -345,35 +336,20 @@ def capturar() -> dict[str, Any]:
     # --- rutas de error: los mensajes también son comportamiento observable ---
     vacio = {"directed": True, "nodes": [], "edges": []}
 
-    # Un algoritmo registrado pero SIN version vectorizada. Sirve para congelar
-    # que el barrido lo distinga de un algoritmo inexistente: son dos problemas
-    # distintos y antes daban el mismo mensaje engañoso.
-    if "solo_escalar" not in registry.KEYS:
-        registry.register(
-            registry.AlgorithmSpec(
-                key="solo_escalar",
-                label="Solo escalar (caso de prueba)",
-                scalar=lambda *a, **k: [],
-                updated=lambda *a, **k: False,
-                batch=None,
-            )
-        )
+    # Un algoritmo sin `batch` usa el sweep ingenuo: se congela su curva.
+    registrar_solo_escalar()
+    np.random.seed(11)
+    resultado["iter_sweep_sin_batch/k2/fv"] = _nativo(
+        list(llamar_iter_sweep(GRAFOS["k2"], "solo_escalar", 0.5, 5, 40, 2, 2))
+    )
 
     casos_error = {
-        "sweep_algoritmo_sin_version_vectorizada": lambda: list(
-            llamar_iter_sweep(GRAFOS["k2"], "solo_escalar", 0.5, 5, 40, 2, 1)
-        ),
-        "batch_algoritmo_sin_version_vectorizada": lambda: llamar_round_batch(
-            get_adj(GRAFOS["k2"]), get_values(GRAFOS["k2"]), True, "solo_escalar", 5, 1, 0.5
-        ),
         "algoritmo_desconocido/run_round": lambda: llamar_run_round(
             GRAFOS["k2"], "xx", 0.5
         ),
         "algoritmo_desconocido/simulate_graph": lambda: llamar_simulate_graph(
             GRAFOS["k2"], "xx", 0.5
         ),
-        "rondas_negativas": lambda: llamar_run_simulation(GRAFOS["k2"], "fv", 0.5, -1),
-        "run_simulation_grafo_vacio": lambda: llamar_run_simulation(vacio, "fv", 0.5, 1),
         "sweep_grafo_vacio": lambda: list(llamar_iter_sweep(vacio, "fv", 0.5, 5, 40, 2, 1)),
         "sweep_puntos_fuera_de_rango": lambda: list(
             llamar_iter_sweep(GRAFOS["k2"], "fv", 0.5, 1, 40, 2, 1)
@@ -383,12 +359,6 @@ def capturar() -> dict[str, Any]:
         ),
         "sweep_sims_demasiadas": lambda: list(
             llamar_iter_sweep(GRAFOS["k2"], "fv", 0.5, 5, 50_001, 2, 1)
-        ),
-        "batch_sims_cero": lambda: llamar_round_batch(
-            get_adj(GRAFOS["k2"]), get_values(GRAFOS["k2"]), True, "fv", 0, 1, 0.5
-        ),
-        "batch_algoritmo_desconocido": lambda: llamar_round_batch(
-            get_adj(GRAFOS["k2"]), get_values(GRAFOS["k2"]), True, "xx", 5, 1, 0.5
         ),
     }
     for nombre, accion in casos_error.items():

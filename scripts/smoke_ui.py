@@ -228,7 +228,7 @@ def editar_campo(nombre: str, valor: str) -> None:
     app.on_param_change(types.SimpleNamespace(target=elemento))
 
 
-print("1. El selector se puebla desde el registro")
+print("1. El selector se puebla desde ALGORITMOS")
 cambiar_algoritmo("fv")
 opciones = opciones_del_selector()
 comprobar(

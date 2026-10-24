@@ -93,7 +93,7 @@ class AppState:
     active_view: str = "editor"
     algorithm: str = "fv"
     # Valores de los parámetros por algoritmo: {"amp": {"agreed": 0.5}, ...}.
-    # Se llena bajo demanda desde los defaults del registro, de modo que cambiar
+    # Se llena bajo demanda desde los defaults de ALGORITMOS, de modo que cambiar
     # de algoritmo y volver conserva lo que el usuario había escrito.
     algorithm_params: dict[str, dict[str, Any]] = field(default_factory=dict)
     show_json: bool = False

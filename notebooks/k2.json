@@ -1,0 +1,35 @@
+{
+  "directed": true,
+  "nodes": [
+    {
+      "id": "node_10",
+      "value": 1,
+      "position": {
+        "x": 326.00974172697994,
+        "y": 368.45561481280527
+      }
+    },
+    {
+      "id": "node_11",
+      "value": 0,
+      "position": {
+        "x": 495.6295911360882,
+        "y": 370.795198942586
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge_0",
+      "source": "node_10",
+      "target": "node_11",
+      "weight": "1"
+    },
+    {
+      "id": "edge_1",
+      "source": "node_11",
+      "target": "node_10",
+      "weight": "1"
+    }
+  ]
+}

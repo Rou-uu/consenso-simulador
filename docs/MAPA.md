@@ -39,6 +39,7 @@ flowchart TB
 | `python/models.py` | `Node`, `Edge`, `GraphTab`, `AppState` | [02](02-modelo-de-datos.md) |
 | `python/geometry.py` | coordenadas, curvas de aristas, color por valor | [03](03-interfaz.md) |
 | `python/simulation/` | el motor | [MOTOR](MOTOR.md) |
+| `notebooks/pruebas.ipynb` | el notebook del original, usando el motor de la app; corre con Jupyter de escritorio | [MOTOR](MOTOR.md) |
 | `scripts/serve.py` | servidor local con los MIME correctos | [00](00-empezar-aqui.md) |
 | `scripts/equivalencia.py` | arnés: el motor no cambió de resultados | [07](07-verificacion.md) |
 | `scripts/smoke_ui.py` | la interfaz con un DOM falso | [07](07-verificacion.md) |

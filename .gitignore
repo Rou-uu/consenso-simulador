@@ -5,3 +5,7 @@ __pycache__/
 # Artefactos generados desde docs/*.md con pandoc
 docs/*.html
 docs/*.pdf
+
+# Salida de notebooks/pruebas.ipynb (update_json)
+notebooks/*_updated.json
+.ipynb_checkpoints/

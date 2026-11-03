@@ -1074,6 +1074,10 @@ def on_algorithm_change(event) -> None:
     render_controls()
 
 
+def on_message_mode_change(event) -> None:
+    STATE.message_mode = str(event.target.value)
+
+
 def on_param_change(event) -> None:
     """Guarda el valor de un campo de parámetro del algoritmo activo.
 
@@ -1135,6 +1139,7 @@ def simulate(*_args) -> None:
         "graph": before.graph_data(),
         "algorithm": STATE.algorithm,
         "algorithmParams": algorithm_params(),
+        "modo": STATE.message_mode,
     }
     fuente = user_source()
     if fuente is not None:
@@ -1409,6 +1414,7 @@ def start_sweep(*_args) -> None:
         # Nombre explícito: este dict ya se llama `params` a nivel del mensaje,
         # y esta clave son los parámetros del algoritmo, no los del sweep.
         "algorithmParams": algorithm_params(),
+        "modo": STATE.message_mode,
         "fuente": user_source(),
         "numPPoints": positive_int("p-points-input", 2),
         "totalSimulationsPerP": positive_int("simulations-input", 1),
@@ -1493,6 +1499,7 @@ def bind_events() -> None:
     listen(by_id("export-btn"), "click", export_json)
     listen(by_id("clear-btn"), "click", clear_graph)
     listen(by_id("algorithm-select"), "change", on_algorithm_change)
+    listen(by_id("message-mode-select"), "change", on_message_mode_change)
     listen(by_id("algorithm-params"), "change", on_param_change)
     listen(by_id("algorithm-params"), "input", on_param_change)
     listen(by_id("user-code"), "input", on_user_code_change)

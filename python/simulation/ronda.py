@@ -52,9 +52,9 @@ def get_values(data: dict) -> np.ndarray:
     return np.array([node['value'] for node in data['nodes']])
 
 
-def who_gets_message(matrix: np.ndarray, directed: bool) -> tuple:
+def who_gets_message_por_arista(matrix: np.ndarray, directed: bool) -> tuple:
     """
-    Determina probabilísticamente qué mensajes se envían.
+    Determina probabilísticamente qué mensajes se envían, con un sorteo por arista.
     Devuelve la matriz de mensajes ya TRANSPUESTA: messages[i] = lo que recibe el nodo i.
 
     `np.ceil(matrix)` es la máscara de aristas: con pesos en [0, 1] solo se
@@ -71,6 +71,32 @@ def who_gets_message(matrix: np.ndarray, directed: bool) -> tuple:
     messages = (matrix > probs).astype(int).T
 
     return messages, probs
+
+
+def who_gets_message_por_emisor(matrix: np.ndarray, directed: bool) -> tuple:
+    """Broadcast: un sorteo por emisor, compartido por todas sus aristas salientes.
+
+    Cada arista conserva su probabilidad p; con pesos iguales, el emisor llega a
+    todos o a nadie. `directed` no se usa: cada extremo de una arista no dirigida
+    sortea por su cuenta, así que a->b y b->a pueden ocurrir por separado.
+    """
+    adj = np.ceil(matrix)
+    probs = np.random.rand(matrix.shape[0], 1) * adj
+    messages = (matrix > probs).astype(int).T
+
+    return messages, probs
+
+
+def who_gets_message(matrix: np.ndarray, directed: bool, modo: str = "por_arista") -> tuple:
+    """Elige el modo de paso de mensajes.
+
+    Cambio respecto a api.py: ahí solo existe el sorteo por arista.
+    """
+    if modo == "por_arista":
+        return who_gets_message_por_arista(matrix, directed)
+    if modo == "por_emisor":
+        return who_gets_message_por_emisor(matrix, directed)
+    raise ValueError(f"Modo de mensajes desconocido: {modo!r}")
 
 
 def propagacion(messages, new_values, values, node_ids, actualizo) -> list:
@@ -92,7 +118,8 @@ def propagacion(messages, new_values, values, node_ids, actualizo) -> list:
     return propagation_info
 
 
-def run_round(graph: dict, algorithm: str = "fv", params: dict | None = None) -> dict:
+def run_round(graph: dict, algorithm: str = "fv", params: dict | None = None,
+              modo: str = "por_arista") -> dict:
     """Una ronda sobre el grafo JSON del editor, con todo lo que pinta la interfaz.
 
     Cambio respecto a api.py: devuelve también los valores antes y después,
@@ -106,7 +133,7 @@ def run_round(graph: dict, algorithm: str = "fv", params: dict | None = None) ->
     values = get_values(graph)
     node_ids = [node['id'] for node in graph['nodes']]
 
-    messages, probs = who_gets_message(matrix, graph['directed'])
+    messages, probs = who_gets_message(matrix, graph['directed'], modo)
     new_values = algoritmo["ronda"](matrix, values, messages, params)
     actualizo = algoritmo.get("actualizo", cambio_el_valor)
 

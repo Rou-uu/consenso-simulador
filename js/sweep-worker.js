@@ -107,6 +107,7 @@ json.dumps(
         _params["graph"],
         algorithm=_params.get("algorithm", "fv"),
         params=_params.get("algorithmParams") or {},
+        modo=_params.get("modo", "por_arista"),
     )
 )
 `);
@@ -132,6 +133,7 @@ for _message in iter_sweep(
     total_simulations_per_p=_params.get("totalSimulationsPerP", 5000),
     iterations=_params.get("iterations", 50),
     rounds=_params.get("rounds", 1),
+    modo=_params.get("modo", "por_arista"),
 ):
     postMessage(to_js(_message, dict_converter=Object.fromEntries))
 `);

@@ -10,8 +10,8 @@ que se pueden leer lado a lado. Este documento dice qué hay en cada archivo y
 | Archivo | Funciones | En `api.py` |
 |---|---|---|
 | `algoritmos.py` | `fv`, `amp`, `fv_batch`, `amp_batch`, `fv_actualizo`, `cambio_el_valor`, `ALGORITMOS`, `buscar` | las funciones del algoritmo |
-| `ronda.py` | `get_adj`, `get_values`, `who_gets_message`, `propagacion`, `run_round`, `update_graph_data`, `simulate_graph` | `POST /simulate` |
-| `barrido.py` | `who_gets_message_batch`, `round_batch`, `run_one_simulation_naive`, `iter_sweep` | `POST /simulate/sweep` y `/simulate/sweep/naive` |
+| `ronda.py` | `get_adj`, `get_values`, `who_gets_message_por_arista`, `who_gets_message_por_emisor`, `who_gets_message`, `propagacion`, `run_round`, `update_graph_data`, `simulate_graph` | `POST /simulate` |
+| `barrido.py` | `who_gets_message_batch_por_arista`, `who_gets_message_batch_por_emisor`, `who_gets_message_batch`, `round_batch`, `run_one_simulation_naive`, `iter_sweep` | `POST /simulate/sweep` y `/simulate/sweep/naive` |
 | `usuario.py` | `instalar` | no existe: es nuevo |
 
 Quién llama a qué:
@@ -36,6 +36,23 @@ Quién llama a qué:
 4. `propagacion` describe cada mensaje enviado; el predicado `actualizo` del
    algoritmo decide si esa arista cuenta como actualización (solo afecta el
    color).
+
+## Modos de paso de mensajes
+
+`who_gets_message` y `who_gets_message_batch` reciben `modo` y eligen el sorteo.
+`run_round`, `round_batch`, `run_one_simulation_naive` e `iter_sweep` lo pasan
+hasta ahí. `messages` y `fired` conservan su forma, así que los algoritmos no
+cambian.
+
+| `modo` | Qué se sortea | Consecuencia |
+|---|---|---|
+| `por_arista` (por omisión) | un número por arista; en no dirigidos, compartido por `a->b` y `b->a` | es el comportamiento de `api.py` |
+| `por_emisor` (broadcast) | un número por emisor, compartido por sus aristas salientes | cada arista conserva su `p`; con pesos iguales llega a todos o a nadie |
+
+En `por_emisor`, una arista no dirigida no comparte sorteo entre sus dos sentidos:
+`a->b` y `b->a` pueden ocurrir por separado. Forzar la simetría arrastraría el
+sorteo de un nodo al otro. `simulate_graph` conserva la respuesta del endpoint y
+siempre usa `por_arista`.
 
 ## El sweep (`iter_sweep`)
 
@@ -91,6 +108,7 @@ Cada fila tiene su comentario `# Cambio respecto a api.py` en el código.
 | `iter_sweep` | mínimo 10 simulaciones por `p` | mínimo 1 | heredado del port anterior |
 | `iter_sweep` | pedir menos simulaciones que iteraciones corría de más | se recortan las iteraciones | el conteo final nunca excede lo pedido |
 | `iter_sweep` | solo algoritmos con `batch` | sin `batch` usa `run_one_simulation_naive` (de `/simulate/sweep/naive`) | un algoritmo nuevo solo necesita su `ronda` |
+| `who_gets_message`, `who_gets_message_batch` | solo el sorteo por arista | `modo` elige entre `por_arista` y `por_emisor` (broadcast) | comparar modelos de paso de mensajes |
 | `usuario.py` | — | algoritmos pegados en la interfaz, bajo la clave `user_alg` | probar un algoritmo sin tocar el repo |
 
 Lo que **no** se trajo de `api.py`: el servidor (FastAPI, CORS, `/health`), el

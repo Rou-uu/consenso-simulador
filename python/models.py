@@ -96,6 +96,8 @@ class AppState:
     # Se llena bajo demanda desde los defaults de ALGORITMOS, de modo que cambiar
     # de algoritmo y volver conserva lo que el usuario había escrito.
     algorithm_params: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # Paso de mensajes: "por_arista" o "por_emisor" (broadcast).
+    message_mode: str = "por_arista"
     show_json: bool = False
     shift_pressed: bool = False
     space_pressed: bool = False

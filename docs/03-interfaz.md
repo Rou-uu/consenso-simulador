@@ -65,6 +65,10 @@ a un diálogo.
 `parametros`, y `algorithm_params()` devuelve los valores que viajan al motor. Lo
 escrito se conserva al cambiar de algoritmo y volver.
 
+El selector `#message-mode-select` es fijo en `index.html` (los modos son del
+motor, no de cada algoritmo). `on_message_mode_change` guarda el valor en
+`STATE.message_mode`, y la ronda y el sweep lo mandan como `modo`.
+
 ## La gráfica del sweep
 
 `render_chart(points)` dibuja la media y la banda del IC en `#sweep-chart-svg`.

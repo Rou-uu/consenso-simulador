@@ -39,7 +39,7 @@ sys.path.insert(0, str(PROJECT_ROOT / "python"))
 import numpy as np  # noqa: E402
 
 from simulation.algoritmos import ALGORITMOS as MOTOR  # noqa: E402
-from simulation.barrido import iter_sweep, round_batch  # noqa: E402
+from simulation.barrido import iter_sweep, round_batch, who_gets_message_batch  # noqa: E402
 from simulation.ronda import (  # noqa: E402
     get_adj,
     get_values,
@@ -94,7 +94,8 @@ def llamar_round_batch_sin_params(matriz, valores, dirigido, algoritmo, sims, ro
     return round_batch(MOTOR[algoritmo]["batch"], matriz, valores, dirigido, sims, times=rondas)
 
 
-def llamar_iter_sweep(grafo, algoritmo, agreed, puntos, sims, iteraciones, rondas):
+def llamar_iter_sweep(grafo, algoritmo, agreed, puntos, sims, iteraciones, rondas,
+                      modo="por_arista"):
     return iter_sweep(
         grafo,
         algoritmo,
@@ -103,6 +104,7 @@ def llamar_iter_sweep(grafo, algoritmo, agreed, puntos, sims, iteraciones, ronda
         total_simulations_per_p=sims,
         iterations=iteraciones,
         rounds=rondas,
+        modo=modo,
     )
 
 
@@ -343,7 +345,74 @@ def capturar() -> dict[str, Any]:
         list(llamar_iter_sweep(GRAFOS["k2"], "solo_escalar", 0.5, 5, 40, 2, 2))
     )
 
+    # --- modo por emisor (broadcast): sus resultados, por los mismos caminos ---
+    for nombre, grafo in GRAFOS.items():
+        matriz = get_adj(grafo)
+        for semilla in (0, 42):
+            np.random.seed(semilla)
+            mensajes, probabilidades = who_gets_message(matriz, grafo["directed"], "por_emisor")
+            resultado[f"por_emisor/who_gets_message/{nombre}/s{semilla}"] = {
+                "messages": _nativo(mensajes),
+                "probabilities": _nativo(probabilidades),
+            }
+            for algoritmo in ALGORITMOS:
+                np.random.seed(semilla)
+                resultado[f"por_emisor/run_round/{nombre}/{algoritmo}/s{semilla}"] = _nativo(
+                    run_round(grafo, algoritmo, _params(0.5), modo="por_emisor")
+                )
+        if len(grafo["nodes"]) == 0:
+            continue
+        for algoritmo in ALGORITMOS:
+            np.random.seed(3)
+            resultado[f"por_emisor/round_batch/{nombre}/{algoritmo}"] = _nativo(
+                round_batch(
+                    MOTOR[algoritmo]["batch"], matriz, get_values(grafo), grafo["directed"],
+                    50, times=2, params=_params(0.5), modo="por_emisor",
+                )
+            )
+    for algoritmo in (*ALGORITMOS, "solo_escalar"):
+        np.random.seed(11)
+        resultado[f"por_emisor/iter_sweep/k2/{algoritmo}"] = _nativo(
+            list(llamar_iter_sweep(GRAFOS["k2"], algoritmo, 0.5, 5, 40, 2, 2, "por_emisor"))
+        )
+
+    # --- modo por emisor: lo que debe cumplir, no solo lo que dio al grabar ---
+    # La línea base congela también un error; estas propiedades dicen qué es correcto.
+    # Nodo 0 -> 1 y 2 con el mismo peso; 1 -> 2 con otro. Asimétrica a propósito.
+    iguales = np.array([[0, 0.5, 0.5], [0, 0, 0.5], [0, 0, 0]])
+    anidados = np.array([[0, 0.3, 0.7], [0, 0, 0], [0, 0, 0]])
+    np.random.seed(5)
+    sorteos = [who_gets_message(iguales, True, "por_emisor")[0] for _ in range(2000)]
+    # `messages` viene transpuesta: messages[target, source].
+    llega_a_1 = np.array([m[1, 0] for m in sorteos])
+    llega_a_2 = np.array([m[2, 0] for m in sorteos])
+    fired = who_gets_message_batch(iguales, np.ceil(iguales), True, 2000, "por_emisor")
+    sorteos_anidados = np.array(
+        [who_gets_message(anidados, True, "por_emisor")[0] for _ in range(20_000)]
+    )
+    resultado["por_emisor/propiedades"] = {
+        "ronda_todo_o_nada": bool((llega_a_1 == llega_a_2).all()),
+        "ronda_emisores_independientes": bool(
+            (np.array([m[2, 1] for m in sorteos]) != llega_a_2).any()
+        ),
+        "batch_todo_o_nada": bool((fired[:, 0, 1] == fired[:, 0, 2]).all()),
+        "batch_emisores_independientes": bool((fired[:, 1, 2] != fired[:, 0, 2]).any()),
+        "conserva_p_por_arista": bool(
+            abs(sorteos_anidados[:, 1, 0].mean() - 0.3) < 0.02
+            and abs(sorteos_anidados[:, 2, 0].mean() - 0.7) < 0.02
+        ),
+        "pesos_distintos_anidados": bool(
+            (sorteos_anidados[:, 1, 0] <= sorteos_anidados[:, 2, 0]).all()
+        ),
+    }
+
     casos_error = {
+        "modo_desconocido/who_gets_message": lambda: who_gets_message(
+            get_adj(GRAFOS["k2"]), True, "xx"
+        ),
+        "modo_desconocido/batch": lambda: who_gets_message_batch(
+            get_adj(GRAFOS["k2"]), np.ceil(get_adj(GRAFOS["k2"])), True, 2, "xx"
+        ),
         "algoritmo_desconocido/run_round": lambda: llamar_run_round(
             GRAFOS["k2"], "xx", 0.5
         ),

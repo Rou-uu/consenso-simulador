@@ -150,6 +150,7 @@ class FakeWorker:
             params["graph"],
             algorithm=params.get("algorithm", "fv"),
             params=params.get("algorithmParams") or {},
+            modo=params.get("modo", "por_arista"),
         )
         self._entregar({"type": "ronda", "resultado": _json.dumps(resultado)})
 
@@ -501,6 +502,30 @@ comprobar("no compila" in caja.textContent, "y dice en qué etapa falló")
 caja.hidden = True
 app.report_engine_error({"type": "error", "message": "algo del motor", "traza": None})
 comprobar(caja.hidden, "un error sin traza no ensucia la caja: ese va por notify")
+
+print("\nEl modo de paso de mensajes llega al Worker")
+indice_html = (PROJECT_ROOT / "index.html").read_text()
+comprobar(
+    re.findall(r'<option value="(por_[a-z]+)"', indice_html) == ["por_arista", "por_emisor"],
+    "el selector de index.html ofrece los dos modos del motor",
+)
+app.STATE.algorithm = "fv"
+app.STATE.round_running = False
+comprobar(app.STATE.message_mode == "por_arista", "por omisión, el modo es por arista")
+app.on_message_mode_change(types.SimpleNamespace(target=types.SimpleNamespace(value="por_emisor")))
+app.simulate()
+comprobar(worker.enviados[-1]["params"].get("modo") == "por_emisor", "la ronda manda el modo elegido")
+app.STATE.round_running = False
+for campo, valor in {
+    "p-points-input": "5", "simulations-input": "40", "iterations-input": "2", "rounds-input": "1",
+}.items():
+    DOCUMENTO.getElementById(campo).value = valor
+app.start_sweep()
+comprobar(
+    FakeWorker.ultimo.enviados[-1]["params"].get("modo") == "por_emisor",
+    "el sweep manda el modo elegido",
+)
+app.finish_sweep()
 
 
 print()

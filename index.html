@@ -62,6 +62,11 @@
                    ALGORITMOS (python/simulation/algoritmos.py). Agregar un algoritmo no toca este archivo. -->
               <select id="algorithm-select" class="algorithm-select"></select>
               <div id="algorithm-params" class="agreed-input-wrapper" hidden></div>
+              <label class="field-label" for="message-mode-select">Paso de mensajes</label>
+              <select id="message-mode-select" class="algorithm-select">
+                <option value="por_arista">Por arista</option>
+                <option value="por_emisor">Broadcast</option>
+              </select>
             </div>
             <!-- Ranura de código propio. El fuente viaja con cada simulación y se
                  compila dentro del Worker, nunca aquí. Ver docs/09 §A.12. -->

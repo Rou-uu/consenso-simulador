@@ -13,13 +13,15 @@ fuente ya hizo pasar por bueno un código que no lo era.
 
 ## `equivalencia.py`: el motor no cambió de resultados
 
-Corre unos 940 casos con semillas fijas (`np.random.seed`) y los compara, valor por
+Corre unos 1050 casos con semillas fijas (`np.random.seed`) y los compara, valor por
 valor, contra `scripts/equivalencia_baseline.json`. Cubre:
 
 - `get_adj` y `get_values` en 13 grafos escritos a mano;
 - `who_gets_message` y `run_round` con `fv` y `amp`, varios `agreed` y semillas;
 - `simulate_graph` (la respuesta de `POST /simulate`) y `update_graph_data`;
 - `round_batch` e `iter_sweep` completos, con y sin `batch`;
+- el modo `por_emisor` por esos mismos caminos, más propiedades que debe cumplir
+  (todo o nada con pesos iguales, cada arista conserva su `p`);
 - el reparto de simulaciones por iteración;
 - los mensajes de error.
 

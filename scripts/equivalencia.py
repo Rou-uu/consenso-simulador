@@ -28,7 +28,9 @@ detectando cualquier cambio de resultado.
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
+import math
 import sys
 from pathlib import Path
 from typing import Any
@@ -207,6 +209,50 @@ def _nativo(valor):
     if isinstance(valor, (list, tuple)):
         return [_nativo(v) for v in valor]
     return valor
+
+
+def _mensajes(n, emisores):
+    """Lo que entrega un broadcast cuando solo `emisores` tuvieron éxito: messages[target, source]."""
+    mensajes = np.zeros((n, n), dtype=int)
+    for emisor in emisores:
+        mensajes[:, emisor] = 1
+        mensajes[emisor, emisor] = 0
+    return mensajes
+
+
+def _conjuntos(n):
+    return [c for k in range(n + 1) for c in itertools.combinations(range(n), k)]
+
+
+def _desacuerdos(algoritmo, valores):
+    """c_j del paper: en cuántos conjuntos de j emisores termina habiendo desacuerdo."""
+    n = len(valores)
+    conteos = [0] * (n + 1)
+    for emisores in _conjuntos(n):
+        decisiones = MOTOR[algoritmo]["ronda"](None, np.array(valores, float), _mensajes(n, emisores), {})
+        conteos[len(emisores)] += len({valor for valor, _ in decisiones}) > 1
+    return conteos
+
+
+def _peor_error(algoritmo, n, p):
+    q = 1 - p
+    return max(
+        sum(c * p**j * q ** (n - j) for j, c in enumerate(_desacuerdos(algoritmo, valores)))
+        for valores in itertools.product((0, 1), repeat=n)
+    )
+
+
+def _batch_igual_a_ronda(algoritmo, n):
+    conjuntos = _conjuntos(n)
+    fired = np.array([_mensajes(n, emisores).T.astype(bool) for emisores in conjuntos])
+    for valores in itertools.product((0.0, 1.0), repeat=n):
+        vals = np.tile(np.array(valores), (len(conjuntos), 1))
+        salida = MOTOR[algoritmo]["batch"](vals, fired, {})
+        for s, emisores in enumerate(conjuntos):
+            decisiones = MOTOR[algoritmo]["ronda"](None, np.array(valores), _mensajes(n, emisores), {})
+            if not np.array_equal(salida[s], [valor for valor, _ in decisiones]):
+                return False
+    return True
 
 
 def capturar() -> dict[str, Any]:
@@ -406,7 +452,69 @@ def capturar() -> dict[str, Any]:
         ),
     }
 
+    # --- courteous y ciclo: lo que demuestra el paper, calculado sin azar ---
+    # No van en la tupla ALGORITMOS: solo aceptan valores 0 y 1, y ciclo pide al
+    # menos 4 nodos, así que fallarían en los grafos de arriba.
+    tabla_1 = {
+        (1, 1, 1, 1, 0): [1, 4, 0, 6, 0, 0],
+        (0, 1, 1, 1, 0): [1, 4, 5, 4, 1, 0],
+        (0, 0, 1, 1, 0): [1, 3, 6, 3, 1, 0],
+        (0, 1, 0, 1, 0): [1, 4, 6, 3, 1, 0],
+        (0, 0, 0, 1, 0): [1, 2, 6, 4, 1, 0],
+        (0, 0, 0, 0, 0): [0, 0, 0, 0, 0, 0],
+    }
+    resultado["protocolos/ciclo/tabla_1"] = all(
+        _desacuerdos("ciclo", valores) == esperado for valores, esperado in tabla_1.items()
+    )
+    # Fórmula (6) del paper; se cumple para cualquier n.
+    resultado["protocolos/courteous/formula_6"] = all(
+        _desacuerdos("courteous", valores) == [
+            math.comb(n - sum(valores), j // 2) * math.comb(sum(valores), j // 2)
+            if j % 2 == 0 and 0 < sum(valores) < n else 0
+            for j in range(n + 1)
+        ]
+        for n in range(3, 7)
+        for valores in itertools.product((0, 1), repeat=n)
+    )
+    # Peor caso exacto: C(p) y, desde p = 2/3, A(p).
+    for p in (0.3, 0.5, 0.688042944721047, 0.8, 0.95):
+        q = 1 - p
+        resultado[f"protocolos/courteous/peor_es_C/p{p}"] = bool(np.isclose(
+            _peor_error("courteous", 5, p), q**5 + 6 * p**2 * q**3 + 3 * p**4 * q
+        ))
+    for p in (0.7, 0.688042944721047, 0.8, 0.95):
+        q = 1 - p
+        resultado[f"protocolos/ciclo/peor_es_A/p{p}"] = bool(np.isclose(
+            _peor_error("ciclo", 5, p), q - 2 * p * q**4
+        ))
+    for n in (4, 5, 6):
+        resultado[f"protocolos/batch_igual_a_ronda/n{n}"] = {
+            algoritmo: _batch_igual_a_ronda(algoritmo, n) for algoritmo in ("courteous", "ciclo")
+        }
+    # El camino por el motor, con la peor entrada de cada uno.
+    completas = [(i, j, 0.5) for i in range(5) for j in range(5) if i != j]
+    for algoritmo, valores in (("courteous", [0, 0, 1, 1, 1]), ("ciclo", [0, 0, 0, 1, 0])):
+        grafo = _grafo(True, valores, completas)
+        np.random.seed(11)
+        resultado[f"protocolos/run_round/{algoritmo}"] = _nativo(
+            run_round(grafo, algoritmo, modo="por_emisor")
+        )
+        np.random.seed(11)
+        resultado[f"protocolos/iter_sweep/{algoritmo}"] = _nativo(
+            list(llamar_iter_sweep(grafo, algoritmo, 0.5, 5, 40, 2, 1, "por_emisor"))
+        )
+
     casos_error = {
+        "protocolos/ciclo_pocos_nodos": lambda: run_round(GRAFOS["k2"], "ciclo"),
+        "protocolos/ciclo_batch_pocos_nodos": lambda: MOTOR["ciclo"]["batch"](
+            np.zeros((2, 3)), np.zeros((2, 3, 3), dtype=bool), {}
+        ),
+        "protocolos/courteous_no_binario": lambda: MOTOR["courteous"]["ronda"](
+            None, np.array([0.5, 0.0]), np.zeros((2, 2), dtype=int), {}
+        ),
+        "protocolos/courteous_batch_no_binario": lambda: MOTOR["courteous"]["batch"](
+            np.array([[0.5, 0.0]]), np.zeros((1, 2, 2), dtype=bool), {}
+        ),
         "modo_desconocido/who_gets_message": lambda: who_gets_message(
             get_adj(GRAFOS["k2"]), True, "xx"
         ),

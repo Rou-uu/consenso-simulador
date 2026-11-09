@@ -3,6 +3,10 @@
  "error/algoritmo_desconocido/simulate_graph": "ValueError: Algoritmo desconocido: 'xx'",
  "error/modo_desconocido/batch": "ValueError: Modo de mensajes desconocido: 'xx'",
  "error/modo_desconocido/who_gets_message": "ValueError: Modo de mensajes desconocido: 'xx'",
+ "error/protocolos/ciclo_batch_pocos_nodos": "ValueError: El algoritmo de ciclo necesita al menos 4 nodos",
+ "error/protocolos/ciclo_pocos_nodos": "ValueError: El algoritmo de ciclo necesita al menos 4 nodos",
+ "error/protocolos/courteous_batch_no_binario": "ValueError: Este algoritmo solo acepta valores 0 y 1",
+ "error/protocolos/courteous_no_binario": "ValueError: Este algoritmo solo acepta valores 0 y 1",
  "error/sweep_grafo_vacio": "ValueError: El grafo no tiene nodos",
  "error/sweep_puntos_fuera_de_rango": "ValueError: num_p_points debe estar entre 2 y 1001",
  "error/sweep_sims_cero": "ValueError: total_simulations_per_p debe estar entre 1 y 50000",
@@ -14933,6 +14937,597 @@
     0.0,
     0.0
    ]
+  ]
+ },
+ "protocolos/batch_igual_a_ronda/n4": {
+  "ciclo": true,
+  "courteous": true
+ },
+ "protocolos/batch_igual_a_ronda/n5": {
+  "ciclo": true,
+  "courteous": true
+ },
+ "protocolos/batch_igual_a_ronda/n6": {
+  "ciclo": true,
+  "courteous": true
+ },
+ "protocolos/ciclo/peor_es_A/p0.688042944721047": true,
+ "protocolos/ciclo/peor_es_A/p0.7": true,
+ "protocolos/ciclo/peor_es_A/p0.8": true,
+ "protocolos/ciclo/peor_es_A/p0.95": true,
+ "protocolos/ciclo/tabla_1": true,
+ "protocolos/courteous/formula_6": true,
+ "protocolos/courteous/peor_es_C/p0.3": true,
+ "protocolos/courteous/peor_es_C/p0.5": true,
+ "protocolos/courteous/peor_es_C/p0.688042944721047": true,
+ "protocolos/courteous/peor_es_C/p0.8": true,
+ "protocolos/courteous/peor_es_C/p0.95": true,
+ "protocolos/iter_sweep/ciclo": [
+  {
+   "algorithm": "ciclo",
+   "iterations": 2,
+   "numPPoints": 5,
+   "simsPerIteration": 20,
+   "type": "start"
+  },
+  {
+   "done": false,
+   "iteration": 0,
+   "points": [
+    {
+     "ciHigh": 1.0,
+     "ciLow": 1.0,
+     "mean": 1.0,
+     "p": 0.0
+    },
+    {
+     "ciHigh": 0.9447062564885614,
+     "ciLow": 0.5552937435114386,
+     "mean": 0.75,
+     "p": 0.25
+    },
+    {
+     "ciHigh": 0.3798619353545204,
+     "ciLow": 0.020138064645479598,
+     "mean": 0.2,
+     "p": 0.5
+    },
+    {
+     "ciHigh": 0.31055889229418854,
+     "ciLow": -0.010558892294188577,
+     "mean": 0.15,
+     "p": 0.75
+    },
+    {
+     "ciHigh": 0.0,
+     "ciLow": 0.0,
+     "mean": 0.0,
+     "p": 1.0
+    }
+   ],
+   "simulationsPerP": 20,
+   "totalIterations": 2,
+   "type": "iteration"
+  },
+  {
+   "done": true,
+   "iteration": 1,
+   "points": [
+    {
+     "ciHigh": 1.0,
+     "ciLow": 1.0,
+     "mean": 1.0,
+     "p": 0.0
+    },
+    {
+     "ciHigh": 0.8651390335272393,
+     "ciLow": 0.5848609664727606,
+     "mean": 0.725,
+     "p": 0.25
+    },
+    {
+     "ciHigh": 0.6061389913358755,
+     "ciLow": 0.2938610086641245,
+     "mean": 0.45,
+     "p": 0.5
+    },
+    {
+     "ciHigh": 0.3859015480751811,
+     "ciLow": 0.11409845192481888,
+     "mean": 0.25,
+     "p": 0.75
+    },
+    {
+     "ciHigh": 0.0,
+     "ciLow": 0.0,
+     "mean": 0.0,
+     "p": 1.0
+    }
+   ],
+   "simulationsPerP": 40,
+   "totalIterations": 2,
+   "type": "iteration"
+  }
+ ],
+ "protocolos/iter_sweep/courteous": [
+  {
+   "algorithm": "courteous",
+   "iterations": 2,
+   "numPPoints": 5,
+   "simsPerIteration": 20,
+   "type": "start"
+  },
+  {
+   "done": false,
+   "iteration": 0,
+   "points": [
+    {
+     "ciHigh": 1.0,
+     "ciLow": 1.0,
+     "mean": 1.0,
+     "p": 0.0
+    },
+    {
+     "ciHigh": 0.5644716887217469,
+     "ciLow": 0.13552831127825307,
+     "mean": 0.35,
+     "p": 0.25
+    },
+    {
+     "ciHigh": 0.31055889229418854,
+     "ciLow": -0.010558892294188577,
+     "mean": 0.15,
+     "p": 0.5
+    },
+    {
+     "ciHigh": 0.31055889229418854,
+     "ciLow": -0.010558892294188577,
+     "mean": 0.15,
+     "p": 0.75
+    },
+    {
+     "ciHigh": 0.0,
+     "ciLow": 0.0,
+     "mean": 0.0,
+     "p": 1.0
+    }
+   ],
+   "simulationsPerP": 20,
+   "totalIterations": 2,
+   "type": "iteration"
+  },
+  {
+   "done": true,
+   "iteration": 1,
+   "points": [
+    {
+     "ciHigh": 1.0,
+     "ciLow": 1.0,
+     "mean": 1.0,
+     "p": 0.0
+    },
+    {
+     "ciHigh": 0.41513903352723935,
+     "ciLow": 0.13486096647276066,
+     "mean": 0.275,
+     "p": 0.25
+    },
+    {
+     "ciHigh": 0.3560587067515341,
+     "ciLow": 0.0939412932484659,
+     "mean": 0.225,
+     "p": 0.5
+    },
+    {
+     "ciHigh": 0.3255404725831883,
+     "ciLow": 0.0744595274168117,
+     "mean": 0.2,
+     "p": 0.75
+    },
+    {
+     "ciHigh": 0.0,
+     "ciLow": 0.0,
+     "mean": 0.0,
+     "p": 1.0
+    }
+   ],
+   "simulationsPerP": 40,
+   "totalIterations": 2,
+   "type": "iteration"
+  }
+ ],
+ "protocolos/run_round/ciclo": {
+  "algorithm": "ciclo",
+  "discrepancy": 0.0,
+  "messages": [
+   [
+    0,
+    1,
+    1,
+    0,
+    1
+   ],
+   [
+    1,
+    0,
+    1,
+    0,
+    1
+   ],
+   [
+    1,
+    1,
+    0,
+    0,
+    1
+   ],
+   [
+    1,
+    1,
+    1,
+    0,
+    1
+   ],
+   [
+    1,
+    1,
+    1,
+    0,
+    0
+   ]
+  ],
+  "probabilities": [
+   [
+    0.0,
+    0.1802696888767692,
+    0.1802696888767692,
+    0.1802696888767692,
+    0.1802696888767692
+   ],
+   [
+    0.019475241487624584,
+    0.0,
+    0.019475241487624584,
+    0.019475241487624584,
+    0.019475241487624584
+   ],
+   [
+    0.4632185264983446,
+    0.4632185264983446,
+    0.0,
+    0.4632185264983446,
+    0.4632185264983446
+   ],
+   [
+    0.7249339291921478,
+    0.7249339291921478,
+    0.7249339291921478,
+    0.0,
+    0.7249339291921478
+   ],
+   [
+    0.42020360458772743,
+    0.42020360458772743,
+    0.42020360458772743,
+    0.42020360458772743,
+    0.0
+   ]
+  ],
+  "propagation": [
+   {
+    "source": "node_1",
+    "target": "node_0",
+    "updated_value": false,
+    "value_sent": 0.0
+   },
+   {
+    "source": "node_2",
+    "target": "node_0",
+    "updated_value": false,
+    "value_sent": 0.0
+   },
+   {
+    "source": "node_4",
+    "target": "node_0",
+    "updated_value": false,
+    "value_sent": 0.0
+   },
+   {
+    "source": "node_0",
+    "target": "node_1",
+    "updated_value": false,
+    "value_sent": 0.0
+   },
+   {
+    "source": "node_2",
+    "target": "node_1",
+    "updated_value": false,
+    "value_sent": 0.0
+   },
+   {
+    "source": "node_4",
+    "target": "node_1",
+    "updated_value": false,
+    "value_sent": 0.0
+   },
+   {
+    "source": "node_0",
+    "target": "node_2",
+    "updated_value": false,
+    "value_sent": 0.0
+   },
+   {
+    "source": "node_1",
+    "target": "node_2",
+    "updated_value": false,
+    "value_sent": 0.0
+   },
+   {
+    "source": "node_4",
+    "target": "node_2",
+    "updated_value": false,
+    "value_sent": 0.0
+   },
+   {
+    "source": "node_0",
+    "target": "node_3",
+    "updated_value": true,
+    "value_sent": 0.0
+   },
+   {
+    "source": "node_1",
+    "target": "node_3",
+    "updated_value": true,
+    "value_sent": 0.0
+   },
+   {
+    "source": "node_2",
+    "target": "node_3",
+    "updated_value": true,
+    "value_sent": 0.0
+   },
+   {
+    "source": "node_4",
+    "target": "node_3",
+    "updated_value": true,
+    "value_sent": 0.0
+   },
+   {
+    "source": "node_0",
+    "target": "node_4",
+    "updated_value": false,
+    "value_sent": 0.0
+   },
+   {
+    "source": "node_1",
+    "target": "node_4",
+    "updated_value": false,
+    "value_sent": 0.0
+   },
+   {
+    "source": "node_2",
+    "target": "node_4",
+    "updated_value": false,
+    "value_sent": 0.0
+   }
+  ],
+  "selectedSources": [
+   null,
+   null,
+   null,
+   null,
+   null
+  ],
+  "values": [
+   0.0,
+   0.0,
+   0.0,
+   0.0,
+   0.0
+  ],
+  "valuesBefore": [
+   0.0,
+   0.0,
+   0.0,
+   1.0,
+   0.0
+  ]
+ },
+ "protocolos/run_round/courteous": {
+  "algorithm": "courteous",
+  "discrepancy": 1.0,
+  "messages": [
+   [
+    0,
+    1,
+    1,
+    0,
+    1
+   ],
+   [
+    1,
+    0,
+    1,
+    0,
+    1
+   ],
+   [
+    1,
+    1,
+    0,
+    0,
+    1
+   ],
+   [
+    1,
+    1,
+    1,
+    0,
+    1
+   ],
+   [
+    1,
+    1,
+    1,
+    0,
+    0
+   ]
+  ],
+  "probabilities": [
+   [
+    0.0,
+    0.1802696888767692,
+    0.1802696888767692,
+    0.1802696888767692,
+    0.1802696888767692
+   ],
+   [
+    0.019475241487624584,
+    0.0,
+    0.019475241487624584,
+    0.019475241487624584,
+    0.019475241487624584
+   ],
+   [
+    0.4632185264983446,
+    0.4632185264983446,
+    0.0,
+    0.4632185264983446,
+    0.4632185264983446
+   ],
+   [
+    0.7249339291921478,
+    0.7249339291921478,
+    0.7249339291921478,
+    0.0,
+    0.7249339291921478
+   ],
+   [
+    0.42020360458772743,
+    0.42020360458772743,
+    0.42020360458772743,
+    0.42020360458772743,
+    0.0
+   ]
+  ],
+  "propagation": [
+   {
+    "source": "node_1",
+    "target": "node_0",
+    "updated_value": true,
+    "value_sent": 0.0
+   },
+   {
+    "source": "node_2",
+    "target": "node_0",
+    "updated_value": true,
+    "value_sent": 1.0
+   },
+   {
+    "source": "node_4",
+    "target": "node_0",
+    "updated_value": true,
+    "value_sent": 1.0
+   },
+   {
+    "source": "node_0",
+    "target": "node_1",
+    "updated_value": true,
+    "value_sent": 0.0
+   },
+   {
+    "source": "node_2",
+    "target": "node_1",
+    "updated_value": true,
+    "value_sent": 1.0
+   },
+   {
+    "source": "node_4",
+    "target": "node_1",
+    "updated_value": true,
+    "value_sent": 1.0
+   },
+   {
+    "source": "node_0",
+    "target": "node_2",
+    "updated_value": true,
+    "value_sent": 0.0
+   },
+   {
+    "source": "node_1",
+    "target": "node_2",
+    "updated_value": true,
+    "value_sent": 0.0
+   },
+   {
+    "source": "node_4",
+    "target": "node_2",
+    "updated_value": true,
+    "value_sent": 1.0
+   },
+   {
+    "source": "node_0",
+    "target": "node_3",
+    "updated_value": false,
+    "value_sent": 0.0
+   },
+   {
+    "source": "node_1",
+    "target": "node_3",
+    "updated_value": false,
+    "value_sent": 0.0
+   },
+   {
+    "source": "node_2",
+    "target": "node_3",
+    "updated_value": false,
+    "value_sent": 1.0
+   },
+   {
+    "source": "node_4",
+    "target": "node_3",
+    "updated_value": false,
+    "value_sent": 1.0
+   },
+   {
+    "source": "node_0",
+    "target": "node_4",
+    "updated_value": true,
+    "value_sent": 0.0
+   },
+   {
+    "source": "node_1",
+    "target": "node_4",
+    "updated_value": true,
+    "value_sent": 0.0
+   },
+   {
+    "source": "node_2",
+    "target": "node_4",
+    "updated_value": true,
+    "value_sent": 1.0
+   }
+  ],
+  "selectedSources": [
+   null,
+   null,
+   null,
+   null,
+   null
+  ],
+  "values": [
+   1.0,
+   1.0,
+   0.0,
+   1.0,
+   0.0
+  ],
+  "valuesBefore": [
+   0.0,
+   0.0,
+   1.0,
+   1.0,
+   1.0
   ]
  },
  "reparto/total1/iter1": {

@@ -19,6 +19,8 @@ Un algoritmo es una entrada de ``ALGORITMOS`` con estas claves:
                 ¿La arista ``source -> target`` cuenta como actualización? Solo
                 decide el color de la arista, no la matemática. Por omisión:
                 «el valor del target cambió».
+``lider``       (opcional) ``True`` si el último nodo es el líder. Solo cambia
+                cómo se dibuja: la interfaz lo pinta como cuadrado.
 ``parametros``  (opcional) ``{nombre: (etiqueta, valor_por_omision)}``. La
                 interfaz arma un campo por parámetro y los manda en ``params``.
 """
@@ -86,6 +88,110 @@ def cambio_el_valor(nuevos: list, valores: np.ndarray, target: int, source: int)
     return not np.isclose(nuevos[target][0], valores[target])
 
 
+# Cambio respecto a api.py: courteous y ciclo no existen ahí. Vienen de «Optimal
+# One-Round Consensus with Five Players» (sección 2). Ver docs/MOTOR.md.
+
+
+def _binarios(values: np.ndarray) -> None:
+    """Courteous y ciclo solo están definidos para entradas 0 y 1."""
+    if not np.isin(values, (0, 1)).all():
+        raise ValueError("Este algoritmo solo acepta valores 0 y 1")
+
+
+def courteous(matrix: np.ndarray, values: np.ndarray, messages: np.ndarray, params: dict) -> list:
+    """Mayoría entre el valor propio y lo recibido; en un empate decide 1 - x_i."""
+    _binarios(values)
+    new_values = []
+    for i, v in enumerate(messages):
+        vistos = [values[i]] + [values[j] for j in np.where(v != 0)[0]]
+        unos = sum(vistos)
+        if 2 * unos == len(vistos):
+            new_values.append((1.0 - values[i], None))
+        else:
+            new_values.append((float(2 * unos > len(vistos)), None))
+    return new_values
+
+
+def courteous_batch(vals: np.ndarray, fired: np.ndarray, params: dict) -> np.ndarray:
+    _binarios(vals)
+    # fired[s, source, target]: lo recibido se suma sobre source (eje 1).
+    unos = vals + (fired * vals[:, :, None]).sum(axis=1)
+    vistos = 1 + fired.sum(axis=1)
+    return np.where(2 * unos == vistos, 1.0 - vals, (2 * unos > vistos).astype(float))
+
+
+def _ciclo_regulares(n: int) -> int:
+    if n < 4:
+        raise ValueError("El algoritmo de ciclo necesita al menos 4 nodos")
+    return n - 1
+
+
+def _regular(i: int, m: int, x_i: float, x_L: float, de_L: bool, recibidos: dict) -> float:
+    """Decisión de un regular. `recibidos` son los {j: x_j} de otros regulares."""
+    R = [x_i] + list(recibidos.values())
+    unanime = len(set(R)) == 1
+    if de_L:
+        return R[0] if len(R) >= 3 and unanime else x_L
+    if unanime:
+        return R[0]
+    if len(R) == 2:
+        j, x_j = next(iter(recibidos.items()))
+        return x_i if j == (i + 1) % m else x_j
+    unos = sum(R)
+    if 2 * unos == len(R):
+        return x_i
+    return float(2 * unos < len(R))
+
+
+def ciclo(matrix: np.ndarray, values: np.ndarray, messages: np.ndarray, params: dict) -> list:
+    """El último nodo es el líder L; los demás desempatan con el ciclo 0->1->...->0.
+
+    El ciclo no es una topología: los mensajes siguen las aristas del grafo.
+    """
+    m = _ciclo_regulares(len(values))
+    _binarios(values)
+    L = m
+    x_L = float(values[L])
+    de_regulares = [float(values[j]) for j in np.where(messages[L] != 0)[0]]
+    decide_L = de_regulares[0] if len(de_regulares) >= 2 and len(set(de_regulares)) == 1 else x_L
+    new_values = []
+    for i in range(m):
+        recibidos = {j: float(values[j]) for j in range(m) if j != i and messages[i][j] != 0}
+        new_values.append((_regular(i, m, float(values[i]), x_L, messages[i][L] != 0, recibidos), None))
+    new_values.append((decide_L, None))
+    return new_values
+
+
+def ciclo_batch(vals: np.ndarray, fired: np.ndarray, params: dict) -> np.ndarray:
+    m = _ciclo_regulares(vals.shape[1])
+    _binarios(vals)
+    L = m
+    x_L = vals[:, L]
+    salida = vals.copy()
+    llegan_a_L = fired[:, :m, L].sum(axis=1)
+    unos_L = (fired[:, :m, L] * vals[:, :m]).sum(axis=1)
+    iguales = (llegan_a_L >= 2) & ((unos_L == 0) | (unos_L == llegan_a_L))
+    salida[:, L] = np.where(iguales, (unos_L > 0).astype(float), x_L)
+    for i in range(m):
+        otros = [j for j in range(m) if j != i]
+        x_i = vals[:, i]
+        llega = fired[:, otros, i]
+        tam = 1 + llega.sum(axis=1)
+        unos = x_i + (llega * vals[:, otros]).sum(axis=1)
+        unanime = (unos == 0) | (unos == tam)
+        valor_unanime = (unos > 0).astype(float)
+        # Con |R| = 2 y sin unanimidad, el valor recibido es 1 - x_i.
+        desempate = np.where(fired[:, (i + 1) % m, i], x_i, 1.0 - x_i)
+        sin_L = np.select(
+            [unanime, tam == 2, 2 * unos == tam],
+            [valor_unanime, desempate, x_i],
+            (2 * unos < tam).astype(float),
+        )
+        con_L = np.where((tam >= 3) & unanime, valor_unanime, x_L)
+        salida[:, i] = np.where(fired[:, L, i], con_L, sin_L)
+    return salida
+
+
 ALGORITMOS = {
     "fv": {
         "nombre": "Flip Value (FV)",
@@ -98,6 +204,17 @@ ALGORITMOS = {
         "ronda": amp,
         "batch": amp_batch,
         "parametros": {"agreed": ("Valor de consenso (<code>agreed</code>)", 0.5)},
+    },
+    "courteous": {
+        "nombre": "Courteous",
+        "ronda": courteous,
+        "batch": courteous_batch,
+    },
+    "ciclo": {
+        "nombre": "Ciclo",
+        "ronda": ciclo,
+        "batch": ciclo_batch,
+        "lider": True,
     },
 }
 

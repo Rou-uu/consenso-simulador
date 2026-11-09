@@ -324,16 +324,24 @@ def render_canvas() -> None:
     by_id("edges-layer").innerHTML = "".join(edge_parts)
     by_id("edge-labels-layer").innerHTML = "".join(label_parts)
 
+    # El líder de un algoritmo que lo declara es el último nodo (ver `lider` en algoritmos.py).
+    lider = tab.nodes[-1].id if algoritmo_activo().get("lider") and tab.nodes else None
     node_parts: list[str] = []
     for node in tab.nodes:
         fill, text_color = value_color(node.value)
         selected = " selected" if node.id == STATE.selected_node_id else ""
+        figura = (
+            f'<rect class="node-circle" x="3" y="3" width="54" height="54" rx="6" fill="{fill}" stroke="#100E1A" stroke-width="3"></rect>'
+            if node.id == lider else
+            f'<circle class="node-circle" cx="30" cy="30" r="30" fill="{fill}" stroke="#100E1A" stroke-width="3"></circle>'
+        )
         node_parts.append(
             f'<g class="graph-node{selected}" data-node-id="{html.escape(node.id)}" '
             f'transform="translate({node.x:.3f} {node.y:.3f})">'
-            f'<circle class="node-circle" cx="30" cy="30" r="30" fill="{fill}" stroke="#100E1A" stroke-width="3"></circle>'
+            f'{figura}'
             f'<text x="30" y="30" text-anchor="middle" dominant-baseline="middle" '
-            f'fill="{text_color}">{html.escape(number_label(node.value))}</text></g>'
+            f'fill="{text_color}">{html.escape(number_label(node.value))}</text>'
+            f'<text class="node-name" x="30" y="76" text-anchor="middle">{html.escape(node.id)}</text></g>'
         )
     by_id("nodes-layer").innerHTML = "".join(node_parts)
     render_minimap()
@@ -1072,6 +1080,7 @@ def on_file_change(event) -> None:
 def on_algorithm_change(event) -> None:
     STATE.algorithm = str(event.target.value)
     render_controls()
+    render_canvas()  # el líder depende del algoritmo
 
 
 def on_message_mode_change(event) -> None:

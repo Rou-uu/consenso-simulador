@@ -4,7 +4,7 @@ No hay suite de tests, a propósito: `AGENTS.md` prohíbe portar la del original
 Hay dos scripts y el recorrido en navegador.
 
 ```bash
-PYTHONDONTWRITEBYTECODE=1 python3 scripts/equivalencia.py   # OK — 943 casos idénticos a la línea base.
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/equivalencia.py   # OK — 1075 casos idénticos a la línea base.
 PYTHONDONTWRITEBYTECODE=1 python3 scripts/smoke_ui.py       # OK — todas las comprobaciones de la interfaz pasaron.
 ```
 
@@ -13,7 +13,7 @@ fuente ya hizo pasar por bueno un código que no lo era.
 
 ## `equivalencia.py`: el motor no cambió de resultados
 
-Corre unos 1050 casos con semillas fijas (`np.random.seed`) y los compara, valor por
+Corre unos 1075 casos con semillas fijas (`np.random.seed`) y los compara, valor por
 valor, contra `scripts/equivalencia_baseline.json`. Cubre:
 
 - `get_adj` y `get_values` en 13 grafos escritos a mano;
@@ -22,6 +22,8 @@ valor, contra `scripts/equivalencia_baseline.json`. Cubre:
 - `round_batch` e `iter_sweep` completos, con y sin `batch`;
 - el modo `por_emisor` por esos mismos caminos, más propiedades que debe cumplir
   (todo o nada con pesos iguales, cada arista conserva su `p`);
+- `courteous` y `ciclo` contra el paper, sin azar: Tabla 1, fórmula (6), el peor
+  caso `C(p)` y `A(p)`, y `batch` igual a `ronda`;
 - el reparto de simulaciones por iteración;
 - los mensajes de error.
 

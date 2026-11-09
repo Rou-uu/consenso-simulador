@@ -9,3 +9,9 @@ docs/*.pdf
 # Salida de notebooks/pruebas.ipynb (update_json)
 notebooks/*_updated.json
 .ipynb_checkpoints/
+
+# Artículos de referencia: el sitio publica todo el repositorio y no deben quedar públicos
+papers/
+
+# Librerías que Quarto copia al renderizar docs/*.md
+docs/*_files/

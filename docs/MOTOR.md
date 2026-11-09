@@ -9,7 +9,7 @@ que se pueden leer lado a lado. Este documento dice qué hay en cada archivo y
 
 | Archivo | Funciones | En `api.py` |
 |---|---|---|
-| `algoritmos.py` | `fv`, `amp`, `fv_batch`, `amp_batch`, `fv_actualizo`, `cambio_el_valor`, `ALGORITMOS`, `buscar` | las funciones del algoritmo |
+| `algoritmos.py` | `fv`, `amp`, `fv_batch`, `amp_batch`, `fv_actualizo`, `cambio_el_valor`, `courteous`, `courteous_batch`, `ciclo`, `ciclo_batch`, `ALGORITMOS`, `buscar` | las funciones del algoritmo; `courteous` y `ciclo` son nuevos |
 | `ronda.py` | `get_adj`, `get_values`, `who_gets_message_por_arista`, `who_gets_message_por_emisor`, `who_gets_message`, `propagacion`, `run_round`, `update_graph_data`, `simulate_graph` | `POST /simulate` |
 | `barrido.py` | `who_gets_message_batch_por_arista`, `who_gets_message_batch_por_emisor`, `who_gets_message_batch`, `round_batch`, `run_one_simulation_naive`, `iter_sweep` | `POST /simulate/sweep` y `/simulate/sweep/naive` |
 | `usuario.py` | `instalar` | no existe: es nuevo |
@@ -54,6 +54,30 @@ En `por_emisor`, una arista no dirigida no comparte sorteo entre sus dos sentido
 sorteo de un nodo al otro. `simulate_graph` conserva la respuesta del endpoint y
 siempre usa `por_arista`.
 
+## Courteous y ciclo
+
+Vienen de *Optimal One-Round Consensus with Five Players* (sección 2), cuyo modelo
+es el modo `por_emisor`. Solo aceptan valores 0 y 1, y dan error con cualquier otro.
+
+- **`courteous`**: mayoría entre el valor propio y lo recibido; en un empate decide
+  `1 - x_i`.
+- **`ciclo`**: el último nodo es el líder `L` y necesita al menos 4 nodos. El ciclo
+  `0->1->...->0` es solo una regla de desempate entre regulares, no una topología.
+
+El teorema del paper cubre 5 nodos. Con otra cantidad, `courteous` sigue la misma
+regla y `ciclo` es una extensión nuestra, sin garantía de óptimo.
+
+Para reproducir la cota `min{C(p), A(p)}` se usa el modo Broadcast, 1 ronda, un grafo
+completo y la peor entrada de cada uno:
+
+| Algoritmo | Valores | Curva | Es la cota |
+|---|---|---|---|
+| `courteous` | `(0,0,1,1,1)` | `C(p) = q^5 + 6p^2q^3 + 3p^4q` | para `p <= 0.688...` |
+| `ciclo` | `(0,0,0,1,0)` | `A(p) = q - 2pq^4` | para `p >= 0.688...` |
+
+En `ciclo`, `A(p)` es su peor caso solo desde `p = 2/3`. Con valores binarios, la
+discrepancia media del sweep es la probabilidad de desacuerdo del paper.
+
 ## El sweep (`iter_sweep`)
 
 Para cada `p` en `linspace(0, 1, num_p_points)` se ponen todas las aristas en
@@ -88,9 +112,12 @@ Claves opcionales:
 | `batch` | acelerar el sweep | el sweep usa el bucle ingenuo |
 | `actualizo` | regla de coloreado de aristas | «el valor del target cambió» |
 | `parametros` | `{"nombre": ("etiqueta", por_omision)}`; la interfaz arma los campos | sin campos |
+| `lider` | `True` si el último nodo es el líder; el editor lo dibuja como cuadrado | todos los nodos son círculos |
 
 Para que el arnés lo cubra, agrega su clave a la tupla `ALGORITMOS` de
-`scripts/equivalencia.py` y regrábalo (agregar claves no altera las viejas).
+`scripts/equivalencia.py` y regrábalo (agregar claves no altera las viejas). Un
+algoritmo que no acepta cualquier grafo, como `courteous` o `ciclo`, lleva casos
+propios en vez de ir en esa tupla.
 
 ## Todo lo que cambió respecto a `api.py`
 
@@ -109,6 +136,7 @@ Cada fila tiene su comentario `# Cambio respecto a api.py` en el código.
 | `iter_sweep` | pedir menos simulaciones que iteraciones corría de más | se recortan las iteraciones | el conteo final nunca excede lo pedido |
 | `iter_sweep` | solo algoritmos con `batch` | sin `batch` usa `run_one_simulation_naive` (de `/simulate/sweep/naive`) | un algoritmo nuevo solo necesita su `ronda` |
 | `who_gets_message`, `who_gets_message_batch` | solo el sorteo por arista | `modo` elige entre `por_arista` y `por_emisor` (broadcast) | comparar modelos de paso de mensajes |
+| `courteous`, `ciclo` | — | protocolos del paper de cinco jugadores | comparar con su cota óptima |
 | `usuario.py` | — | algoritmos pegados en la interfaz, bajo la clave `user_alg` | probar un algoritmo sin tocar el repo |
 
 Lo que **no** se trajo de `api.py`: el servidor (FastAPI, CORS, `/health`), el

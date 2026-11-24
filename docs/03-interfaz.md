@@ -114,23 +114,54 @@ estado del sweep. El Worker se la pasa a `iter_sweep`, que siembra cada bloque
 La explicación de cada modo de paso de mensajes está en `MODOS_AYUDA`; un modo
 nuevo en el selector necesita su entrada ahí (`smoke_ui` lo vigila).
 
+## Varios algoritmos a la vez
+
+El editor y «Código» trabajan con un solo algoritmo: el del selector
+(`STATE.algorithm`). El análisis usa los palomeados en `#algorithm-checks`
+(`STATE.sweep_algorithms`); `claves_visibles()` dice cuáles están en juego en la
+vista actual, y de ahí salen los campos de parámetros y la caja del algoritmo
+propio. Las casillas, como el selector, las arma `render_algorithm_options`
+desde `ALGORITMOS`.
+
+`start_sweep` crea un experimento por algoritmo en `STATE.experiments` y un
+Worker para cada uno (`start_sweep_worker`), todos con la misma semilla. Cada
+experimento tiene la forma de un sweep de un solo algoritmo, así que su curva es
+la misma que si se corriera solo. El error de uno no detiene a los demás:
+`finish_sweep(clave)` cierra su Worker y el sweep acaba cuando no queda ninguno.
+`#sweep-status` muestra una línea por algoritmo (`render_sweep_status`).
+
+`STATE.experiment` es el experimento **en detalle** (`STATE.detail_algorithm`,
+que se elige en `#detail-select` cuando hay más de uno): de él salen la tabla, el
+desglose por rondas y las descargas CSV y JSON.
+
 ## La gráfica del sweep
 
-`render_chart(points)` dibuja la media y la banda del IC en `#sweep-chart-svg`
+`render_chart()` dibuja en `#chart-curves`, por cada experimento con puntos, su
+banda del IC, su media y su teórica, dentro de `#sweep-chart-svg`
 (viewBox de 800 de ancho; el área de trazado son las constantes `CHART_*`). El eje X
 es siempre `p` en [0, 1], así que sus marcas y su rejilla están fijas en
 `index.html` con esos mismos números; si cambian las constantes, cambian ahí también.
 El eje Y usa números redondos (`nice_axis`), y el tooltip
-(`on_chart_pointer_move`) muestra el punto más cercano a `p`.
+(`on_chart_pointer_move`) muestra, para el `p` más cercano, una línea por
+algoritmo.
+
+Cada algoritmo tiene su color (`curve_color`, por su lugar en el registro: no
+cambia según cuáles estén palomeados); su teórica va punteada y en el mismo
+color aclarado (`theory_color`). El color va en `style`, no como atributo, para
+que el CSS de la clase no lo pise. `#chart-toggles` es la leyenda y a la vez las
+casillas de «qué se muestra»: una por curva más la del IC. Lo despalomeado queda
+en `STATE.hidden_curves` (`"fv:sim"`, `"fv:teo"`, `"ic"`) y no cuenta para la
+escala del eje.
 
 ## Tabla y curva teórica
 
 Antes de la primera iteración el Worker manda `{type: "teorica", valores, motivo}`
-(ver [MOTOR](MOTOR.md#la-curva-teórica-teoriapy)); se guarda en
-`STATE.experiment`. `theory_for(points)` la devuelve solo si corresponde a esos
+(ver [MOTOR](MOTOR.md#la-curva-teórica-teoriapy)); se guarda en el experimento
+de ese algoritmo. `theory_for(experiment)` la devuelve solo si corresponde a sus
 puntos. `render_chart` la dibuja punteada y la incluye en la escala;
-`render_results` arma la leyenda (o dice por qué no hay curva) y la tabla
-`#results-table`, una fila por p. El CSV y el JSON la llevan también.
+`render_results` arma las casillas de la leyenda (o dice por qué no hay curva) y
+la tabla `#results-table` del experimento en detalle, una fila por p. El CSV y
+el JSON la llevan también.
 
 ## Desglose por rondas
 
@@ -180,7 +211,7 @@ ejemplo de `index.html` (`PLANTILLA_USUARIO`); si tiene cambios, pide confirmaci
 
 ## Descargas
 
-`start_sweep` guarda en `STATE.experiment` lo que mandó al Worker (red, algoritmo,
+`start_sweep` guarda en cada experimento lo que mandó a su Worker (red, algoritmo,
 parámetros, modo, código propio y semilla), y cada evento `iteration` le pone la
 curva más reciente y si ya terminó. Las descargas salen de ahí, no de los
 controles: si después cambias la red o el algoritmo, el archivo sigue
@@ -190,7 +221,10 @@ describiendo la corrida que se ve.
 |---|---|---|
 | CSV | `experiment_csv` | `p,media,ic_bajo,ic_alto,simulaciones`, una fila por p |
 | JSON | `experiment_json` | todo lo necesario para repetirlo (la red en el formato de importación) y la curva; `completo` es falso si se detuvo |
-| SVG | `chart_svg` | la gráfica tal como se ve, con su estilo en `CHART_SVG_STYLE` porque fuera de la página no hay `app.css` |
+| SVG | `chart_svg` | la gráfica tal como se ve (todas las curvas a la vista, **sin leyenda**), con su estilo en `CHART_SVG_STYLE` porque fuera de la página no hay `app.css` |
+
+El CSV y el JSON son del experimento en detalle: uno por algoritmo, con el mismo
+formato que antes de haber varios.
 
 Los constructores son puros y `smoke_ui.py` los prueba, incluido que con solo lo
 que trae el JSON se repite la misma curva. `download()` es lo único que toca el

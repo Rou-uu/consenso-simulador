@@ -25,9 +25,11 @@ from simulation.usuario import CLAVE as CLAVE_USUARIO
 
 STATE = AppState()
 PROXIES: list[Any] = []
-# Dos workers distintos a proposito: el del barrido se termina al cancelar
+# Workers distintos a proposito: los del barrido se terminan al cancelar
 # y ENGINE tiene que sobrevivir a eso para seguir atendiendo al editor.
-WORKER = None
+# shortcut: un Worker (con su Pyodide) por algoritmo palomeado, todos a la vez;
+# si la memoria aprieta, turnarlos dentro de uno solo.
+WORKERS: dict[str, Any] = {}
 ENGINE = None
 # Un unico proxy retenido para el plazo de la ronda: crear uno por ronda haria
 # crecer PROXIES sin fin, porque `retain` no libera nunca.
@@ -41,7 +43,6 @@ CONNECTION: dict[str, Any] = {}
 PAN: dict[str, Any] = {}
 LAST_NODE_CLICK: dict[str, Any] = {}
 DIALOG_CALLBACK: Callable[[str], bool] | None = None
-CHART_POINTS: list[dict[str, float]] = []
 #: El código de ejemplo con que arranca el editor (el de index.html). Mientras el
 #: textarea lo conserve, «Editar una copia» lo reemplaza sin preguntar.
 PLANTILLA_USUARIO = ""
@@ -79,10 +80,18 @@ SWEEP_LIMITS = {
 }
 
 
+def entrada_de(clave: str) -> dict[str, Any]:
+    return RANURA_USUARIO if clave == CLAVE_USUARIO else ALGORITMOS[clave]
+
+
 def algoritmo_activo() -> dict[str, Any]:
-    if STATE.algorithm == CLAVE_USUARIO:
-        return RANURA_USUARIO
-    return ALGORITMOS[STATE.algorithm]
+    return entrada_de(STATE.algorithm)
+
+
+def claves_visibles() -> list[str]:
+    """Los algoritmos en juego en esta vista: los palomeados en el análisis; si
+    no, el del selector (el editor y «Código» trabajan con uno solo)."""
+    return list(STATE.sweep_algorithms) if STATE.active_view == "analysis" else [STATE.algorithm]
 
 
 def by_id(element_id: str):
@@ -187,28 +196,56 @@ def current_graph_json() -> dict[str, Any]:
     return STATE.tab.graph_data()
 
 
-def algorithm_params() -> dict[str, Any]:
-    """Parámetros propios del algoritmo activo, en el formato que espera el motor.
+def algorithm_params(clave: str | None = None) -> dict[str, Any]:
+    """Parámetros propios de un algoritmo (el activo, si no se dice), en el formato del motor.
 
     Los toma de `ALGORITMOS` (valores por omisión) y del estado (lo que el usuario editó). No
     conoce ningún algoritmo por nombre.
     """
-    guardados = STATE.algorithm_params.setdefault(STATE.algorithm, {})
-    for nombre, (_, por_omision) in algoritmo_activo().get("parametros", {}).items():
+    clave = clave or STATE.algorithm
+    guardados = STATE.algorithm_params.setdefault(clave, {})
+    for nombre, (_, por_omision) in entrada_de(clave).get("parametros", {}).items():
         guardados.setdefault(nombre, por_omision)
     return dict(guardados)
 
 
 def render_algorithm_options() -> None:
-    """Puebla el selector con los algoritmos registrados."""
+    """Puebla el selector y las casillas del análisis con los algoritmos registrados."""
+    todos = [*ALGORITMOS.items(), (CLAVE_USUARIO, RANURA_USUARIO)]
     opciones = "".join(
         f'<option value="{html.escape(clave)}">{html.escape(algoritmo["nombre"])}</option>'
-        for clave, algoritmo in [*ALGORITMOS.items(), (CLAVE_USUARIO, RANURA_USUARIO)]
+        for clave, algoritmo in todos
     )
     select = by_id("algorithm-select")
     if select.innerHTML != opciones:
         select.innerHTML = opciones
     select.value = STATE.algorithm
+    casillas = "".join(
+        f'<label class="checkbox-label"><input type="checkbox" data-algoritmo="{html.escape(clave)}"'
+        f'{" checked" if clave in STATE.sweep_algorithms else ""} />'
+        f'<span>{html.escape(algoritmo["nombre"])}</span></label>'
+        for clave, algoritmo in todos
+    )
+    checks = by_id("algorithm-checks")
+    if checks.innerHTML != casillas:
+        checks.innerHTML = casillas
+
+
+def on_algorithm_check(event) -> None:
+    """Palomear o despalomear un algoritmo del sweep. Delegado: las casillas se regeneran."""
+    clave = event.target.getAttribute("data-algoritmo") if event.target else None
+    if not clave:
+        return
+    marcadas = set(STATE.sweep_algorithms) - {str(clave)}
+    if event.target.checked:
+        marcadas.add(str(clave))
+    # En el orden del registro, no en el de los clics.
+    STATE.sweep_algorithms = [c for c in [*ALGORITMOS, CLAVE_USUARIO] if c in marcadas]
+    render_controls()
+    # Las casillas se regeneraron: quien usa el teclado no debe perder su lugar.
+    casilla = by_id("algorithm-checks").querySelector(f'[data-algoritmo="{clave}"]')
+    if casilla is not None:
+        casilla.focus()
 
 
 def render_user_code() -> None:
@@ -219,7 +256,7 @@ def render_user_code() -> None:
     plantilla inicial es el contenido del elemento en ``index.html``.
     """
 
-    propio = STATE.algorithm == CLAVE_USUARIO
+    propio = CLAVE_USUARIO in claves_visibles()
     # En «Código» la caja solo tendría el error: sin error quedaría un marco vacío.
     sin_nada = STATE.active_view == "code" and by_id("user-code-error").hidden
     set_hidden("user-algorithm", not propio or sin_nada)
@@ -243,10 +280,10 @@ def clear_user_code_error() -> None:
     render_user_code()
 
 
-def user_source() -> str | None:
+def user_source(clave: str | None = None) -> str | None:
     """El fuente que debe viajar en el mensaje, o ``None`` si no aplica."""
 
-    if STATE.algorithm != CLAVE_USUARIO:
+    if (clave or STATE.algorithm) != CLAVE_USUARIO:
         return None
     return STATE.user_source or str(by_id("user-code").value)
 
@@ -368,29 +405,36 @@ def edit_copy(*_args) -> None:
 
 
 def render_algorithm_params() -> None:
-    """Genera los campos del algoritmo activo desde su declaración de parámetros.
+    """Genera los campos de los algoritmos en juego desde su declaración de parámetros.
 
-    Solo reconstruye el marcado cuando cambia el algoritmo: regenerarlo en cada
+    Solo reconstruye el marcado cuando cambian los algoritmos: regenerarlo en cada
     render pisaría lo que el usuario está escribiendo y le quitaría el foco al
     campo. Las etiquetas se insertan como HTML a propósito (vienen de
     ``algoritmos.py``, que es código del proyecto) para poder usar ``<code>``.
     """
     contenedor = by_id("algorithm-params")
-    if str(contenedor.getAttribute("data-algorithm") or "") == STATE.algorithm:
+    claves = claves_visibles()
+    firma = "|".join(claves)
+    if str(contenedor.getAttribute("data-algorithm") or "") == firma:
         return
 
-    parametros = algoritmo_activo().get("parametros", {})
-    valores = algorithm_params()
-    campos = "".join(
-        f'<label class="field-label" for="param-{html.escape(nombre)}">{etiqueta}</label>'
-        f'<input id="param-{html.escape(nombre)}" class="agreed-input" type="number" '
-        f'step="any" value="{html.escape(str(valores[nombre]))}" '
-        f'data-param="{html.escape(nombre)}" />'
-        for nombre, (etiqueta, _) in parametros.items()
-    )
-    contenedor.innerHTML = campos
-    contenedor.setAttribute("data-algorithm", STATE.algorithm)
-    contenedor.hidden = not parametros
+    con_campos = [clave for clave in claves if entrada_de(clave).get("parametros")]
+    campos = []
+    for clave in con_campos:
+        valores = algorithm_params(clave)
+        # Con varios algoritmos a la vez, cada campo dice de cuál es.
+        prefijo = f'{html.escape(entrada_de(clave)["nombre"])} · ' if len(con_campos) > 1 else ""
+        for nombre, (etiqueta, _) in entrada_de(clave)["parametros"].items():
+            campo = html.escape(f"param-{clave}-{nombre}")
+            campos.append(
+                f'<label class="field-label" for="{campo}">{prefijo}{etiqueta}</label>'
+                f'<input id="{campo}" class="agreed-input" type="number" '
+                f'step="any" value="{html.escape(str(valores[nombre]))}" '
+                f'data-clave="{html.escape(clave)}" data-param="{html.escape(nombre)}" />'
+            )
+    contenedor.innerHTML = "".join(campos)
+    contenedor.setAttribute("data-algorithm", firma)
+    contenedor.hidden = not campos
 
 
 def graph_snapshot(tab: GraphTab | None = None) -> GraphTab:
@@ -634,33 +678,108 @@ def render_chart_axis(max_y: float, divisions: int, top: float, bottom: float) -
     by_id("chart-axis-labels").innerHTML = "".join(labels)
 
 
-def theory_for(points: list[dict[str, float]]) -> list[float] | None:
-    """La curva exacta del experimento en curso, si existe y corresponde a estos puntos."""
-    teorica = STATE.experiment.get("teorica") if STATE.experiment else None
-    return teorica if teorica and len(teorica) == len(points) else None
+def theory_for(experiment: dict[str, Any] | None) -> list[float] | None:
+    """La curva exacta de un experimento, si existe y corresponde a sus puntos."""
+    teorica = experiment.get("teorica") if experiment else None
+    return teorica if teorica and len(teorica) == len(experiment["puntos"]) else None
+
+
+#: Un color por algoritmo, en el orden del registro: el color sigue al algoritmo,
+#: no a cuántos estén palomeados. Paleta categórica validada (daltonismo y
+#: contraste) sobre el fondo de la gráfica.
+CURVE_COLORS = ("#3987e5", "#d95926", "#199e70", "#c98500", "#d55181")
+
+
+def curve_color(clave: str) -> str:
+    # shortcut: 5 colores; con un sexto algoritmo se repiten, y ahí toca ampliar la paleta.
+    orden = [*ALGORITMOS, CLAVE_USUARIO]
+    return CURVE_COLORS[orden.index(clave) % len(CURVE_COLORS)] if clave in orden else CURVE_COLORS[0]
+
+
+def theory_color(clave: str) -> str:
+    """El color del algoritmo aclarado: la teórica va punteada encima de su media
+    simulada, y con el mismo color no se distinguiría."""
+    color = curve_color(clave)
+    return "#" + "".join(f"{(int(color[i:i + 2], 16) + 2 * 255) // 3:02x}" for i in (1, 3, 5))
+
+
+def curve_visible(curva: str) -> bool:
+    return curva not in STATE.hidden_curves
+
+
+def chart_series() -> list[tuple[str, dict[str, Any]]]:
+    """Los experimentos del último sweep que ya tienen puntos."""
+    return [(clave, e) for clave, e in STATE.experiments.items() if e["puntos"]]
+
+
+def on_curve_toggle(event) -> None:
+    """Una casilla de «Mostrar en la gráfica». Delegado: las casillas se regeneran."""
+    curva = event.target.getAttribute("data-curva") if event.target else None
+    if not curva:
+        return
+    if event.target.checked:
+        STATE.hidden_curves.discard(str(curva))
+    else:
+        STATE.hidden_curves.add(str(curva))
+    render_chart()
+
+
+def on_detail_change(event) -> None:
+    STATE.detail_algorithm = str(event.target.value)
+    render_results()
+    render_downloads()
+    if STATE.experiment and STATE.experiment["puntos"]:
+        setup_trace()
+    else:
+        set_hidden("trace-panel", True)
 
 
 def render_results() -> None:
-    """Leyenda de la gráfica y tabla de resultados del último sweep."""
+    """Las casillas de «Mostrar en la gráfica» (que son también su leyenda) y la
+    tabla de resultados del experimento en detalle."""
+
+    def casilla(curva: str, muestra: str, texto: str) -> str:
+        marcada = " checked" if curve_visible(curva) else ""
+        return (f'<label class="legend-item"><input type="checkbox" data-curva="{html.escape(curva)}"{marcada} />'
+                f"{muestra}{texto}</label>")
+
+    leyenda = []
+    for clave, e in chart_series():
+        nombre = html.escape(e["nombre"])
+        leyenda.append(casilla(f"{clave}:sim", f'<span class="legend-swatch" style="--c:{curve_color(clave)}"></span>',
+                               f"{nombre}: media simulada"))
+        if theory_for(e):
+            leyenda.append(casilla(f"{clave}:teo",
+                                   f'<span class="legend-swatch theory" style="--c:{theory_color(clave)}"></span>',
+                                   f"{nombre}: teórica exacta"))
+        else:
+            leyenda.append(f'<span class="legend-item">{nombre}: sin curva teórica '
+                           f'({html.escape(e.get("motivo_teorica") or "no disponible")}).</span>')
+    if leyenda:
+        leyenda.append(casilla("ic", '<span class="legend-swatch band"></span>', "IC 95 %"))
+    marcado = "".join(leyenda)
+    casillas = by_id("chart-toggles")
+    if casillas.innerHTML != marcado:  # no regenerar en cada pasada: quita el foco
+        casillas.innerHTML = marcado
+
+    # Con un solo algoritmo no hay nada que elegir.
+    set_hidden("detail-picker", len(STATE.experiments) < 2)
+    detalle = by_id("detail-select")
+    opciones = "".join(
+        f'<option value="{html.escape(clave)}">{html.escape(e["nombre"])}</option>'
+        for clave, e in STATE.experiments.items()
+    )
+    if detalle.innerHTML != opciones:
+        detalle.innerHTML = opciones
+    detalle.value = STATE.detail_algorithm or ""
+
     experiment = STATE.experiment
     puntos = experiment["puntos"] if experiment else []
     set_hidden("results-table", not puntos)
     if not puntos:
-        by_id("theory-note").innerHTML = ""
         by_id("results-table-body").innerHTML = ""
         return
-    teorica = theory_for(puntos)
-    leyenda = [
-        '<span class="legend-item"><span class="legend-swatch"></span>media simulada</span>',
-        '<span class="legend-item"><span class="legend-swatch band"></span>IC 95 %</span>',
-    ]
-    if teorica:
-        leyenda.append('<span class="legend-item"><span class="legend-swatch theory"></span>'
-                       'teórica: discrepancia esperada exacta</span>')
-    else:
-        leyenda.append(f'<span class="legend-item">Sin curva teórica: '
-                       f'{html.escape(experiment.get("motivo_teorica") or "no disponible")}.</span>')
-    by_id("theory-note").innerHTML = "".join(leyenda)
+    teorica = theory_for(experiment)
     filas = []
     for i, punto in enumerate(puntos):
         teo = f"<td>{teorica[i]:.4f}</td>" if teorica else '<td class="sin-dato">—</td>'
@@ -672,26 +791,27 @@ def render_results() -> None:
     set_text("results-table-summary", f"Tabla de resultados ({len(puntos)} valores de p)")
 
 
-def render_chart(points: list[dict[str, float]]) -> None:
-    global CHART_POINTS, CHART_MAX_Y
-    CHART_POINTS = points
+def render_chart() -> None:
+    """Dibuja, por cada algoritmo del último sweep, su banda, su media y su
+    teórica: las que estén palomeadas en «Mostrar en la gráfica»."""
+    global CHART_MAX_Y
     set_hidden("chart-tooltip", True)
     left, right, top, bottom = CHART_LEFT, CHART_RIGHT, CHART_TOP, CHART_BOTTOM
+    con_ic = curve_visible("ic")
 
-    teorica = theory_for(points)
-    if points:
-        values = [float(p["ciHigh"]) for p in points] + [float(p["mean"]) for p in points] + (teorica or [])
-        max_y, divisions = nice_axis(max(values))
-    else:
-        max_y, divisions = 1.0, 4
+    # (clave, puntos, teórica o None), solo con lo que está a la vista.
+    curvas = []
+    values: list[float] = []
+    for clave, e in chart_series():
+        puntos = e["puntos"] if curve_visible(f"{clave}:sim") else None
+        teorica = theory_for(e) if curve_visible(f"{clave}:teo") else None
+        if puntos:
+            values += [float(p["ciHigh" if con_ic else "mean"]) for p in puntos] + [float(p["mean"]) for p in puntos]
+        values += teorica or []
+        curvas.append((clave, e["puntos"], puntos is not None, teorica))
+    max_y, divisions = nice_axis(max(values)) if values else (1.0, 4)
     CHART_MAX_Y = max_y
     render_chart_axis(max_y, divisions, top, bottom)
-
-    by_id("chart-theory-line").setAttribute("d", "")
-    if not points:
-        by_id("chart-confidence-band").setAttribute("d", "")
-        by_id("chart-mean-line").setAttribute("d", "")
-        return
 
     def x_coord(p: float) -> float:
         return left + max(0.0, min(1.0, p)) * (right - left)
@@ -699,24 +819,33 @@ def render_chart(points: list[dict[str, float]]) -> None:
     def y_coord(value: float) -> float:
         return bottom - (value / max_y) * (bottom - top)
 
-    mean_path = " ".join(
-        ("M" if index == 0 else "L") + f" {x_coord(float(point['p'])):.2f},{y_coord(float(point['mean'])):.2f}"
-        for index, point in enumerate(points)
-    )
-    upper = [f"{x_coord(float(p['p'])):.2f},{y_coord(float(p['ciHigh'])):.2f}" for p in points]
-    lower = [f"{x_coord(float(p['p'])):.2f},{y_coord(float(p['ciLow'])):.2f}" for p in reversed(points)]
-    band_path = "M " + " L ".join(upper + lower) + " Z"
-    by_id("chart-mean-line").setAttribute("d", mean_path)
-    by_id("chart-confidence-band").setAttribute("d", band_path)
-    if teorica:
-        by_id("chart-theory-line").setAttribute("d", " ".join(
+    def trazo(puntos: list[dict[str, float]], valores: list[float]) -> str:
+        return " ".join(
             ("M" if i == 0 else "L") + f" {x_coord(float(pt['p'])):.2f},{y_coord(v):.2f}"
-            for i, (pt, v) in enumerate(zip(points, teorica))
-        ))
+            for i, (pt, v) in enumerate(zip(puntos, valores))
+        )
+
+    # Bandas al fondo, medias encima y teóricas hasta arriba. El color va en
+    # `style` y no en un atributo: el CSS de la clase pisaría el atributo.
+    bandas, medias, teoricas = [], [], []
+    for clave, puntos, simulada, teorica in curvas:
+        if simulada:
+            if con_ic:
+                upper = [f"{x_coord(float(p['p'])):.2f},{y_coord(float(p['ciHigh'])):.2f}" for p in puntos]
+                lower = [f"{x_coord(float(p['p'])):.2f},{y_coord(float(p['ciLow'])):.2f}" for p in reversed(puntos)]
+                bandas.append(f'<path class="chart-confidence-band" style="fill:{curve_color(clave)}" '
+                              f'd="M {" L ".join(upper + lower)} Z"></path>')
+            medias.append(f'<path class="chart-mean-line" style="stroke:{curve_color(clave)}" '
+                          f'd="{trazo(puntos, [float(p["mean"]) for p in puntos])}"></path>')
+        if teorica:
+            teoricas.append(f'<path class="chart-theory-line" style="stroke:{theory_color(clave)}" '
+                            f'd="{trazo(puntos, teorica)}"></path>')
+    by_id("chart-curves").innerHTML = "".join(bandas + medias + teoricas)
 
 
 def on_chart_pointer_move(event) -> None:
-    if not CHART_POINTS:
+    series = chart_series()
+    if not series:
         return
     svg = by_id("sweep-chart-svg")
     bounds = svg.getBoundingClientRect()
@@ -724,23 +853,33 @@ def on_chart_pointer_move(event) -> None:
         return
     svg_x = (float(event.clientX) - float(bounds.left)) * CHART_WIDTH / float(bounds.width)
     p_value = max(0.0, min(1.0, (svg_x - CHART_LEFT) / (CHART_RIGHT - CHART_LEFT)))
-    point = min(CHART_POINTS, key=lambda item: abs(float(item["p"]) - p_value))
+    # Todos los algoritmos de un sweep comparten los valores de p.
+    rejilla = series[0][1]["puntos"]
+    i = min(range(len(rejilla)), key=lambda k: abs(float(rejilla[k]["p"]) - p_value))
+    lineas = [f'<strong>p = {float(rejilla[i]["p"]):.3f}</strong>']
+    for clave, e in series:
+        if i >= len(e["puntos"]):
+            continue
+        point = e["puntos"][i]
+        partes = []
+        if curve_visible(f"{clave}:sim"):
+            partes.append(f'{float(point["mean"]):.4f} [{float(point["ciLow"]):.4f}, {float(point["ciHigh"]):.4f}]')
+        teorica = theory_for(e)
+        if teorica and curve_visible(f"{clave}:teo"):
+            partes.append(f"teórica {teorica[i]:.4f}")
+        if partes:
+            lineas.append(f'<span class="legend-swatch" style="--c:{curve_color(clave)}"></span> '
+                          f'{html.escape(e["nombre"])}: ' + " · ".join(partes))
     tooltip = by_id("chart-tooltip")
-    tooltip.innerHTML = (
-        f'<strong>p = {float(point["p"]):.3f}</strong><br>'
-        f'Media: {float(point["mean"]):.4f}<br>'
-        f'IC 95%: [{float(point["ciLow"]):.4f}, {float(point["ciHigh"]):.4f}]'
-    )
-    teorica = theory_for(CHART_POINTS)
-    if teorica:
-        tooltip.innerHTML += f'<br>Teórica: {teorica[CHART_POINTS.index(point)]:.4f}'
+    tooltip.innerHTML = "<br>".join(lineas)
     chart_bounds = tooltip.parentElement.getBoundingClientRect()
     local_x = float(event.clientX) - float(chart_bounds.left)
     local_y = float(event.clientY) - float(chart_bounds.top)
     tooltip.hidden = False  # visible antes de medirlo: oculto mide 0 de ancho
     ancho = float(tooltip.offsetWidth or 176.0)
+    alto = float(tooltip.offsetHeight or 68.0)
     tooltip.style.left = f"{max(4.0, min(local_x + 12.0, float(chart_bounds.width) - ancho - 4.0)):.1f}px"
-    tooltip.style.top = f"{max(4.0, local_y - 68.0):.1f}px"
+    tooltip.style.top = f"{max(4.0, local_y - alto - 12.0):.1f}px"
 
 
 #: El estilo de la gráfica con colores literales: el SVG descargado no ve app.css.
@@ -752,22 +891,22 @@ CHART_SVG_STYLE = (
     ".chart-axis-labels .chart-axis-title{fill:#6e6690;font-size:12px}"
     ".chart-confidence-band{fill:#6e7cf2;fill-opacity:.18;stroke:none}"
     ".chart-mean-line{fill:none;stroke:#f4b45c;stroke-width:2.5}"
-    ".chart-theory-line{fill:none;stroke:#7fd6c2;stroke-width:2;stroke-dasharray:6 5}"
+    ".chart-theory-line{fill:none;stroke:#7fd6c2;stroke-width:1.5;stroke-dasharray:6 5}"
     "</style>"
     '<rect width="100%" height="100%" fill="#1f1b30"/>'
 )
 
 
-def experiment_basename(experiment: dict[str, Any]) -> str:
+def experiment_basename(experiment: dict[str, Any], algoritmos: str = "") -> str:
     red = re.sub(r"[^A-Za-z0-9_-]+", "-", experiment["red"]).strip("-") or "red"
     params = experiment["params"]
-    return f"sweep_{red}_{params['algorithm']}_semilla{params['semilla']}"
+    return f"sweep_{red}_{algoritmos or params['algorithm']}_semilla{params['semilla']}"
 
 
 def experiment_csv(experiment: dict[str, Any]) -> str:
     """La curva, una fila por p. `repr` conserva todos los dígitos del float."""
     n = experiment["simulaciones_por_p"]
-    teorica = theory_for(experiment["puntos"])
+    teorica = theory_for(experiment)
     filas = ["p,media,ic_bajo,ic_alto,simulaciones,teorica"]
     for i, punto in enumerate(experiment["puntos"]):
         filas.append(
@@ -785,7 +924,7 @@ def experiment_json(experiment: dict[str, Any]) -> str:
     cargar tal cual.
     """
     params = experiment["params"]
-    teorica = theory_for(experiment["puntos"])
+    teorica = theory_for(experiment)
     documento = {
         "fecha": experiment["fecha"],
         "red": params["graph"],
@@ -850,6 +989,8 @@ def download_experiment(formato: str) -> None:
     elif formato == "json":
         download(f"{nombre}.json", experiment_json(experiment), "application/json")
     else:
+        # La gráfica trae todas las curvas, no solo la del experimento en detalle.
+        nombre = experiment_basename(experiment, "-".join(clave for clave, _ in chart_series()))
         download(f"{nombre}.svg", chart_svg(str(by_id("sweep-chart-svg").outerHTML)), "image/svg+xml")
 
 
@@ -884,7 +1025,7 @@ def render_controls() -> None:
         # evita que una espera larga y normal parezca la aplicación colgada.
         etiqueta = "Cargando motor…"
     set_text("simulate-btn", etiqueta)
-    by_id("sweep-run-btn").disabled = not bool(tab.nodes) or STATE.sweep_running
+    by_id("sweep-run-btn").disabled = not bool(tab.nodes) or STATE.sweep_running or not STATE.sweep_algorithms
     set_hidden("simulation-results", STATE.simulation is None)
     if STATE.simulation is not None:
         set_text("toggle-simulation-btn", "Ver Antes" if STATE.show_after else "Ver Después")
@@ -1567,7 +1708,7 @@ def on_message_mode_change(event) -> None:
 
 
 def on_param_change(event) -> None:
-    """Guarda el valor de un campo de parámetro del algoritmo activo.
+    """Guarda el valor de un campo de parámetro en su algoritmo (`data-clave`).
 
     Delegado en el contenedor porque los campos se regeneran al cambiar de
     algoritmo y un listener por campo se perdería.
@@ -1579,8 +1720,9 @@ def on_param_change(event) -> None:
         valor = float(str(event.target.value))
     except ValueError:
         return
-    algorithm_params()  # asegura que el diccionario del algoritmo exista
-    STATE.algorithm_params[STATE.algorithm][str(name)] = valor
+    clave = str(event.target.getAttribute("data-clave") or STATE.algorithm)
+    algorithm_params(clave)  # asegura que el diccionario del algoritmo exista
+    STATE.algorithm_params[clave][str(name)] = valor
 
 
 def apply_propagation(edges: list[Edge], propagation: list[dict[str, Any]]) -> None:
@@ -1934,6 +2076,10 @@ def render_sweep_plan(*_args) -> None:
     )
     if por_p != plan["pedidas"]:
         texto += f" Pediste {miles(plan['pedidas'])}: en pasadas iguales caben {miles(por_p)}."
+    if len(STATE.sweep_algorithms) > 1:
+        texto += f" Eso, por cada uno de los {len(STATE.sweep_algorithms)} algoritmos."
+    elif not STATE.sweep_algorithms:
+        texto = "Palomea al menos un algoritmo."
     try:
         semilla = seed_field()
         texto += " Semilla: al azar." if semilla is None else f" Semilla: {semilla}."
@@ -1950,19 +2096,21 @@ def set_sweep_inputs_disabled(disabled: bool) -> None:
 
 
 def stop_sweep(*_args) -> None:
-    global WORKER
-    if WORKER is not None:
-        WORKER.terminate()
-        WORKER = None
-    STATE.sweep_running = False
-    set_sweep_inputs_disabled(False)
-    by_id("sweep-run-btn").disabled = not bool(STATE.tab.nodes)
+    finish_sweep()
     by_id("sweep-status").innerHTML = "<p>Ajusta los parámetros y ejecuta el sweep.</p>"
 
 
+def render_sweep_status() -> None:
+    """Una línea por algoritmo del sweep: su avance o su error."""
+    lineas = []
+    for experiment in STATE.experiments.values():
+        clase = ' class="sweep-error"' if experiment["error"] else ""
+        lineas.append(f'<p{clase}>{html.escape(experiment["nombre"])}: {html.escape(experiment["estado"])}</p>')
+    by_id("sweep-status").innerHTML = "".join(lineas)
+
+
 def start_sweep(*_args) -> None:
-    global WORKER
-    if not STATE.tab.nodes or STATE.sweep_running:
+    if not STATE.tab.nodes or STATE.sweep_running or not STATE.sweep_algorithms:
         return
     try:
         semilla = seed_field()
@@ -1972,108 +2120,134 @@ def start_sweep(*_args) -> None:
     # Siempre viaja una semilla: si no la escribieron se sortea aquí, para poder
     # mostrarla y que cualquier corrida se pueda repetir.
     STATE.sweep_seed = random.randrange(SEED_MAX + 1) if semilla is None else semilla
-    params = {
+    comunes = {
         "graph": current_graph_json(),
-        "algorithm": STATE.algorithm,
-        # Nombre explícito: este dict ya se llama `params` a nivel del mensaje,
-        # y esta clave son los parámetros del algoritmo, no los del sweep.
-        "algorithmParams": algorithm_params(),
         "modo": STATE.message_mode,
-        "fuente": user_source(),
         "numPPoints": sweep_field("p-points-input"),
         "totalSimulationsPerP": sweep_field("simulations-input"),
         "iterations": sweep_field("iterations-input"),
         "rounds": sweep_field("rounds-input"),
+        # La misma para todos: como iter_sweep siembra cada bloque (pasada, p),
+        # la curva de un algoritmo no depende de cuáles otros se palomearon.
         "semilla": STATE.sweep_seed,
     }
-    STATE.experiment = {
-        "params": params,
-        "red": STATE.tab.name,
-        "nombre": algoritmo_activo()["nombre"],
-        "fecha": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "puntos": [],
-        "simulaciones_por_p": 0,
-        "completo": False,
-        # La manda el Worker antes de la primera iteración (teoria.curva_exacta).
-        "teorica": None,
-        "motivo_teorica": "calculando…",
+    fecha = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    # Un experimento por algoritmo, cada uno con la forma de un sweep de uno solo:
+    # así la tabla, el desglose y las descargas no saben que hay varios.
+    STATE.experiments = {
+        clave: {
+            "params": {
+                **comunes,
+                "algorithm": clave,
+                # Nombre explícito: este dict ya se llama `params` a nivel del mensaje,
+                # y esta clave son los parámetros del algoritmo, no los del sweep.
+                "algorithmParams": algorithm_params(clave),
+                "fuente": user_source(clave),
+            },
+            "red": STATE.tab.name,
+            "nombre": entrada_de(clave)["nombre"],
+            "fecha": fecha,
+            "puntos": [],
+            "simulaciones_por_p": 0,
+            "completo": False,
+            # La manda el Worker antes de la primera iteración (teoria.curva_exacta).
+            "teorica": None,
+            "motivo_teorica": "calculando…",
+            "estado": "cargando motor Python del sweep…",
+            "error": False,
+        }
+        for clave in STATE.sweep_algorithms
     }
+    STATE.detail_algorithm = STATE.sweep_algorithms[0]
     STATE.sweep_running = True
     set_sweep_inputs_disabled(True)
     set_hidden("trace-panel", True)
-    render_chart([])
+    render_chart()
+    render_results()
     render_downloads()
-    by_id("sweep-status").innerHTML = "<p>Cargando motor Python del sweep…</p>"
-    WORKER = Worker.new(
+    render_sweep_status()
+    for clave in STATE.experiments:
+        start_sweep_worker(clave)
+
+
+def start_sweep_worker(clave: str) -> None:
+    """El Worker que corre el sweep de un algoritmo y va llenando su experimento."""
+    experiment = STATE.experiments[clave]
+    worker = Worker.new(
         "./js/sweep-worker.js",
         to_js({"type": "module"}, dict_converter=Object.fromEntries),
     )
+    WORKERS[clave] = worker
+
+    def fallo(texto: str) -> None:
+        experiment.update(estado=f"Error: {texto}", error=True)
+        render_sweep_status()
+        finish_sweep(clave)
 
     def on_message(event):
         data = event.data.to_py() if hasattr(event.data, "to_py") else event.data
         message = dict(data)
         kind = str(message.get("type", ""))
         if kind == "iteration":
-            points = [dict(point) for point in message.get("points", [])]
-            render_chart(points)
-            if STATE.experiment is not None:
-                primera = not STATE.experiment["puntos"]
-                STATE.experiment.update(
-                    puntos=points,
-                    simulaciones_por_p=int(message["simulationsPerP"]),
-                    completo=bool(message.get("done")),
-                )
-                render_downloads()
+            primera = not experiment["puntos"]
+            experiment.update(
+                puntos=[dict(point) for point in message.get("points", [])],
+                simulaciones_por_p=int(message["simulationsPerP"]),
+                completo=bool(message.get("done")),
+            )
+            render_chart()
+            render_results()
+            render_downloads()
+            if experiment is STATE.experiment:
                 if primera:
                     setup_trace()
                 else:
                     # Cada pasada suma simulaciones que ya se pueden inspeccionar.
-                    total = STATE.experiment["simulaciones_por_p"]
+                    total = experiment["simulaciones_por_p"]
                     by_id("trace-sim").max = str(total)
                     set_text("trace-sim-out", f"de {miles(total)}")
-            render_results()
             completed = " — completo" if message.get("done") else ""
-            by_id("sweep-status").innerHTML = (
-                f'<p>Iteración {int(message["iteration"])+1}/{int(message["totalIterations"])} — '
-                f'{int(message["simulationsPerP"])} sims/p{completed} · semilla {STATE.sweep_seed}</p>'
+            experiment["estado"] = (
+                f'Iteración {int(message["iteration"])+1}/{int(message["totalIterations"])} — '
+                f'{int(message["simulationsPerP"])} sims/p{completed} · semilla {STATE.sweep_seed}'
             )
+            render_sweep_status()
         elif kind == "teorica":
-            if STATE.experiment is not None:
-                valores = message.get("valores")
-                STATE.experiment["teorica"] = [float(v) for v in valores] if valores else None
-                STATE.experiment["motivo_teorica"] = str(message.get("motivo") or "")
-                render_chart(CHART_POINTS)
-                render_results()
+            valores = message.get("valores")
+            experiment["teorica"] = [float(v) for v in valores] if valores else None
+            experiment["motivo_teorica"] = str(message.get("motivo") or "")
+            render_chart()
+            render_results()
         elif kind == "end":
-            finish_sweep()
+            finish_sweep(clave)
         elif kind == "error":
-            by_id("sweep-status").innerHTML = f'<p class="sweep-error">Error: {html.escape(str(message.get("message")))}</p>'
             # El traceback del código pegado se queda en el panel del editor,
             # que es donde está la caja de texto que hay que corregir.
             if message.get("traza"):
                 report_engine_error(message)
-            finish_sweep()
-        elif kind in {"loading", "start"}:
-            if kind == "loading":
-                by_id("sweep-status").innerHTML = "<p>Cargando Python y NumPy en el worker…</p>"
+            fallo(str(message.get("message")))
 
-    def on_error(event):
-        by_id("sweep-status").innerHTML = f'<p class="sweep-error">Error: {html.escape(str(event.message))}</p>'
-        finish_sweep()
-
-    WORKER.addEventListener("message", retain(on_message))
-    WORKER.addEventListener("error", retain(on_error))
-    WORKER.postMessage(to_js({"type": "run", "params": params}, dict_converter=Object.fromEntries))
+    worker.addEventListener("message", retain(on_message))
+    worker.addEventListener("error", retain(lambda event: fallo(str(event.message))))
+    worker.postMessage(to_js({"type": "run", "params": experiment["params"]}, dict_converter=Object.fromEntries))
 
 
-def finish_sweep() -> None:
-    global WORKER
-    if WORKER is not None:
-        WORKER.terminate()
-        WORKER = None
-    STATE.sweep_running = False
-    set_sweep_inputs_disabled(False)
-    by_id("sweep-run-btn").disabled = not bool(STATE.tab.nodes)
+def finish_sweep(clave: str | None = None) -> None:
+    """Termina el Worker de `clave` (o todos). El sweep acaba cuando no queda ninguno:
+    el error de un algoritmo no detiene a los demás."""
+    for k in [clave] if clave else list(WORKERS):
+        worker = WORKERS.pop(k, None)
+        if worker is not None:
+            worker.terminate()
+    if not WORKERS:
+        STATE.sweep_running = False
+        set_sweep_inputs_disabled(False)
+        render_controls()
+
+
+def open_user_code(*_args) -> None:
+    STATE.algorithm = CLAVE_USUARIO  # «Código» muestra el algoritmo del selector
+    change_view("code")
 
 
 def bind_events() -> None:
@@ -2101,6 +2275,9 @@ def bind_events() -> None:
     listen(by_id("export-btn"), "click", export_json)
     listen(by_id("clear-btn"), "click", clear_graph)
     listen(by_id("algorithm-select"), "change", on_algorithm_change)
+    listen(by_id("algorithm-checks"), "change", on_algorithm_check)
+    listen(by_id("chart-toggles"), "change", on_curve_toggle)
+    listen(by_id("detail-select"), "change", on_detail_change)
     listen(by_id("message-mode-select"), "change", on_message_mode_change)
     listen(by_id("algorithm-params"), "change", on_param_change)
     listen(by_id("algorithm-params"), "input", on_param_change)
@@ -2110,7 +2287,7 @@ def bind_events() -> None:
     listen(by_id("reset-simulation-btn"), "click", reset_simulation)
     listen(by_id("view-analysis"), "click", lambda _event: change_view("analysis"))
     listen(by_id("view-code"), "click", lambda _event: change_view("code"))
-    listen(by_id("open-code-btn"), "click", lambda _event: change_view("code"))
+    listen(by_id("open-code-btn"), "click", open_user_code)
     listen(by_id("copy-code-btn"), "click", copy_code)
     listen(by_id("edit-copy-btn"), "click", edit_copy)
     listen(by_id("edit-network-btn"), "click", lambda _event: change_view("editor"))
@@ -2143,7 +2320,7 @@ def main() -> None:
     bind_events()
     start_engine_worker()
     render_all()
-    render_chart([])
+    render_chart()
     render_downloads()
     window.graphSimulatorReady = True
 

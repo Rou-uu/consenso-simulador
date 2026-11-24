@@ -71,6 +71,9 @@ class FakeElement:
     def setAttribute(self, nombre, valor):
         self._atributos[nombre] = str(valor)
 
+    def querySelector(self, _selector):
+        return None
+
     def focus(self):
         pass
 
@@ -218,6 +221,7 @@ def campos_de_parametros() -> list[str]:
 
 def cambiar_algoritmo(clave: str) -> None:
     app.STATE.algorithm = clave
+    app.STATE.sweep_algorithms = [clave]
     app.render_algorithm_options()
     app.render_algorithm_params()
 
@@ -315,14 +319,20 @@ def curva(maximo: float) -> list[dict]:
     ]
 
 
-app.render_chart(curva(1.0))
+def graficar(puntos: list[dict]) -> None:
+    """Un sweep de un solo algoritmo con estos puntos, y a dibujar."""
+    app.STATE.experiments = {"fv": {"puntos": puntos, "nombre": "FV", "teorica": None}} if puntos else {}
+    app.render_chart()
+
+
+graficar(curva(1.0))
 comprobar(
     etiquetas_y() == ["0", "0.25", "0.5", "0.75", "1"],
     f"máximo 1.0 → {etiquetas_y()} (antes terminaba en 1.08)",
 )
-app.render_chart(curva(0.87))
+graficar(curva(0.87))
 comprobar(etiquetas_y()[-1] == "1", "máximo 0.87 → el eje llega a 1, no a 0.94")
-app.render_chart(curva(2.5))
+graficar(curva(2.5))
 comprobar(
     etiquetas_y() == ["0", "0.5", "1", "1.5", "2", "2.5"],
     f"máximo 2.5 → {etiquetas_y()} (divisiones variables)",
@@ -331,7 +341,7 @@ comprobar(
     lineas_rejilla() == len(etiquetas_y()),
     "la rejilla tiene tantas líneas como marcas el eje",
 )
-app.render_chart([])
+graficar([])
 comprobar(
     etiquetas_y() == ["0", "0.25", "0.5", "0.75", "1"],
     "sin datos vuelve a la escala 0–1",
@@ -449,6 +459,7 @@ ALGORITMOS.update(CATALOGO_DE_LA_INTERFAZ)
 
 # --- la mitad de interfaz ---
 app.STATE.algorithm = usuario.CLAVE
+app.STATE.sweep_algorithms = [usuario.CLAVE]
 app.STATE.user_source = ""
 DOCUMENTO.getElementById("user-code").value = "# plantilla de index.html"
 app.render_user_code()
@@ -461,11 +472,14 @@ comprobar(
 app.on_user_code_change(types.SimpleNamespace(target=types.SimpleNamespace(value="# lo que escribí")))
 comprobar(app.user_source() == "# lo que escribí", "user_source() devuelve lo tecleado")
 app.STATE.algorithm = "fv"
+app.STATE.sweep_algorithms = ["fv"]
 comprobar(app.user_source() is None, "con un algoritmo de casa no viaja ningún fuente")
 app.render_user_code()
 comprobar(DOCUMENTO.getElementById("user-algorithm").hidden, "y la caja se esconde")
 
 app.STATE.algorithm = usuario.CLAVE
+
+app.STATE.sweep_algorithms = [usuario.CLAVE]
 app.simulate()
 comprobar(
     worker.enviados[-1]["params"].get("fuente") == "# lo que escribí",
@@ -510,6 +524,7 @@ comprobar(
     "el selector de index.html ofrece los dos modos del motor",
 )
 app.STATE.algorithm = "fv"
+app.STATE.sweep_algorithms = ["fv"]
 app.STATE.round_running = False
 comprobar(app.STATE.message_mode == "por_arista", "por omisión, el modo es por arista")
 app.on_message_mode_change(types.SimpleNamespace(target=types.SimpleNamespace(value="por_emisor")))
@@ -635,7 +650,7 @@ import io  # noqa: E402
 import json as json_  # noqa: E402
 import xml.etree.ElementTree as ET  # noqa: E402
 
-app.STATE.experiment = None
+app.STATE.experiments = {}
 app.render_downloads()
 comprobar(DOCUMENTO.getElementById("download-csv-btn").disabled, "sin experimento, los botones están apagados")
 
@@ -644,6 +659,7 @@ app.STATE.tab.nodes = [Node("a", 0), Node("b", 1)]
 app.STATE.tab.edges = [Edge("e", "a", "b", "0.5")]
 campo_semilla.value = "99"
 app.STATE.algorithm = "amp"
+app.STATE.sweep_algorithms = ["amp"]
 for campo, valor in {"p-points-input": "5", "simulations-input": "40", "iterations-input": "2", "rounds-input": "1"}.items():
     DOCUMENTO.getElementById(campo).value = valor
 app.STATE.sweep_running = False
@@ -682,7 +698,7 @@ comprobar([float(f["teorica"]) for f in filas] == valores_teoricos, "CSV: trae l
 comprobar(DOCUMENTO.getElementById("results-table-body").innerHTML.count("<tr>") == 5
           and "sin-dato" not in DOCUMENTO.getElementById("results-table-body").innerHTML,
           "la tabla tiene una fila por p, con su valor teórico")
-comprobar(DOCUMENTO.getElementById("chart-theory-line").getAttribute("d").startswith("M"),
+comprobar('class="chart-theory-line"' in DOCUMENTO.getElementById("chart-curves").innerHTML,
           "la curva teórica se dibuja en la gráfica")
 
 doc = json_.loads(app.experiment_json(experimento))
@@ -704,6 +720,7 @@ comprobar(arbol.tag == "{http://www.w3.org/2000/svg}svg", "SVG: XML válido y co
 comprobar(arbol[0].tag.endswith("style") and arbol[1].tag.endswith("rect"), "SVG: trae su estilo y su fondo")
 comprobar((arbol.get("width"), arbol.get("height")) == ("800", "440"), "SVG: declara su tamaño")
 app.STATE.algorithm = "fv"
+app.STATE.sweep_algorithms = ["fv"]
 campo_semilla.value = ""
 
 print("\nEl código de los algoritmos de casa se puede copiar y corre igual")
@@ -741,6 +758,7 @@ ALGORITMOS.pop(usuario.CLAVE, None)
 
 print("\nLa pestaña «Código»")
 app.STATE.algorithm = "courteous"
+app.STATE.sweep_algorithms = ["courteous"]
 app.change_view("code")
 comprobar("view-code" in clases and "view-analysis" not in clases, "«Código» es una pestaña propia")
 comprobar(not DOCUMENTO.getElementById("builtin-code").hidden and DOCUMENTO.getElementById("user-code-panel").hidden,
@@ -759,6 +777,8 @@ comprobar(DOCUMENTO.getElementById("builtin-code").hidden and not DOCUMENTO.getE
           "y la pestaña pasa al editor")
 
 app.STATE.algorithm = "fv"
+
+app.STATE.sweep_algorithms = ["fv"]
 app.render_controls()
 editor.value = "# mi trabajo"
 app.STATE.user_source = "# mi trabajo"
@@ -772,6 +792,7 @@ app.edit_copy()
 app.submit_dialog()
 comprobar(editor.value == app.codigo_de("fv") and app.STATE.algorithm == usuario.CLAVE, "aceptar lo reemplaza")
 app.STATE.algorithm = "fv"
+app.STATE.sweep_algorithms = ["fv"]
 app.change_view("analysis")
 
 print("\nLa discrepancia teórica: exacta para una ronda")
@@ -887,6 +908,7 @@ app.STATE.tab.name = "k"
 app.STATE.tab.nodes = [Node(f"n{i}", v) for i, v in enumerate([1, 1, 0, 1, 0])]
 app.STATE.tab.edges = [Edge(f"e{i}{j}", f"n{i}", f"n{j}", "1") for i in range(5) for j in range(5) if i != j]
 app.STATE.algorithm = "fv"
+app.STATE.sweep_algorithms = ["fv"]
 for campo, valor in {"p-points-input": "11", "simulations-input": "30", "iterations-input": "3",
                      "rounds-input": "4", "seed-input": "99"}.items():
     DOCUMENTO.getElementById(campo).value = valor
@@ -943,6 +965,88 @@ for oyente in motor.oyentes.get("message", []):
     oyente(types.SimpleNamespace(data={"type": "error", "para": "traza", "id": app.TRACE_PEDIDO, "message": "x"}))
 comprobar(app.STATE.round_running, "un error del desglose no destraba la ronda del editor")
 app.STATE.round_running = False
+
+print("\nVarios algoritmos a la vez: casillas, un Worker por algoritmo y qué se dibuja")
+
+
+def casilla(atributo: str, clave: str, marcada: bool):
+    elemento = FakeElement("casilla")
+    elemento.setAttribute(atributo, clave)
+    elemento.checked = marcada
+    return types.SimpleNamespace(target=elemento)
+
+
+app.STATE.active_view = "analysis"
+app.STATE.sweep_algorithms = ["fv"]
+app.on_algorithm_check(casilla("data-algoritmo", "amp", True))
+comprobar(app.STATE.sweep_algorithms == ["fv", "amp"], "palomear AMP lo suma al sweep, en el orden del registro")
+marcadas = re.findall(r'data-algoritmo="([^"]+)" checked', DOCUMENTO.getElementById("algorithm-checks").innerHTML)
+comprobar(marcadas == ["fv", "amp"], f"las casillas salen de ALGORITMOS y reflejan el estado: {marcadas}")
+comprobar(campos_de_parametros() == ["agreed"], "en el análisis aparecen los campos de los palomeados (AMP)")
+app.on_algorithm_check(casilla("data-algoritmo", "fv", False))
+app.on_algorithm_check(casilla("data-algoritmo", "amp", False))
+comprobar(app.STATE.sweep_algorithms == [] and DOCUMENTO.getElementById("sweep-run-btn").disabled,
+          "sin ningún algoritmo palomeado no se puede ejecutar")
+app.STATE.sweep_algorithms = ["fv", "amp"]
+
+creados: list[FakeWorker] = []
+nuevo_original = FakeWorker.new
+FakeWorker.new = classmethod(lambda cls, url, options=None: creados.append(cls(url, options)) or creados[-1])
+app.STATE.tab.nodes = [Node("a", 0), Node("b", 1)]
+app.STATE.tab.edges = [Edge("e", "a", "b", "0.5"), Edge("f", "b", "a", "0.5")]
+DOCUMENTO.getElementById("seed-input").value = "7"
+DOCUMENTO.getElementById("rounds-input").value = "1"  # la teórica solo existe para 1 ronda
+app.STATE.sweep_running = False
+app.start_sweep()
+FakeWorker.new = nuevo_original
+enviados = [w.enviados[-1]["params"] for w in creados]
+comprobar([e["algorithm"] for e in enviados] == ["fv", "amp"], "arranca un Worker por algoritmo palomeado")
+comprobar(enviados[0]["semilla"] == enviados[1]["semilla"] == 7 and enviados[1]["algorithmParams"] == {"agreed": 0.9},
+          "todos con la misma semilla y cada uno con sus parámetros")
+curvas = {}
+for worker, mandado in zip(creados, enviados):
+    evento = list(iter_sweep(mandado["graph"], algorithm=mandado["algorithm"], params=mandado["algorithmParams"],
+                             num_p_points=mandado["numPPoints"], total_simulations_per_p=mandado["totalSimulationsPerP"],
+                             iterations=mandado["iterations"], rounds=mandado["rounds"], semilla=7))[1]
+    curvas[mandado["algorithm"]] = evento["points"]
+    teo, motivo = curva_exacta(mandado["graph"], mandado["algorithm"], mandado["algorithmParams"], mandado["modo"],
+                               mandado["rounds"], np.linspace(0, 1, mandado["numPPoints"]))
+    worker._entregar({"type": "teorica", "valores": teo, "motivo": motivo})
+    worker._entregar(evento)
+comprobar({c: e["puntos"] for c, e in app.STATE.experiments.items()} == curvas,
+          "cada algoritmo guarda su propia curva, igual a la de correrlo solo con esa semilla")
+
+
+def dibujadas(clase: str) -> int:
+    return DOCUMENTO.getElementById("chart-curves").innerHTML.count(f'class="{clase}"')
+
+
+comprobar((dibujadas("chart-mean-line"), dibujadas("chart-theory-line"), dibujadas("chart-confidence-band")) == (2, 2, 2),
+          "la gráfica trae media, teórica y banda de los dos")
+leyenda = DOCUMENTO.getElementById("chart-toggles").innerHTML
+comprobar(re.findall(r'data-curva="([^"]+)" checked', leyenda) == ["fv:sim", "fv:teo", "amp:sim", "amp:teo", "ic"],
+          "«Mostrar en la gráfica» tiene una casilla por curva, todas palomeadas")
+app.on_curve_toggle(casilla("data-curva", "fv:sim", False))
+app.on_curve_toggle(casilla("data-curva", "amp:teo", False))
+comprobar((dibujadas("chart-mean-line"), dibujadas("chart-theory-line"), dibujadas("chart-confidence-band")) == (1, 1, 1),
+          "despalomear una curva la quita (y la banda se va con su media)")
+app.on_curve_toggle(casilla("data-curva", "ic", False))
+comprobar(dibujadas("chart-confidence-band") == 0 and dibujadas("chart-mean-line") == 1, "la casilla del IC quita las bandas")
+app.STATE.hidden_curves.clear()
+
+comprobar(app.STATE.detail_algorithm == "fv" and not DOCUMENTO.getElementById("detail-picker").hidden,
+          "con dos algoritmos aparece el selector de detalle, en el primero")
+app.on_detail_change(types.SimpleNamespace(target=types.SimpleNamespace(value="amp")))
+comprobar(app.STATE.experiment is app.STATE.experiments["amp"]
+          and app.experiment_basename(app.STATE.experiment).endswith("_amp_semilla7")
+          and motor.enviados[-1]["params"]["algorithm"] == "amp",
+          "cambiar el detalle cambia la tabla, las descargas y el desglose a ese algoritmo")
+creados[0]._entregar({"type": "error", "message": "tronó"})
+comprobar(app.STATE.sweep_running and "sweep-error" in DOCUMENTO.getElementById("sweep-status").innerHTML,
+          "el error de un algoritmo se muestra y no detiene a los demás")
+creados[1]._entregar({"type": "end"})
+comprobar(not app.STATE.sweep_running and not app.WORKERS, "el sweep termina cuando acaba el último Worker")
+app.STATE.sweep_algorithms = ["fv"]
 
 print()
 if FALLAS:

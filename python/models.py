@@ -114,9 +114,16 @@ class AppState:
     sweep_running: bool = False
     # La semilla con la que corrió (o corre) el último sweep: la escrita o la sorteada.
     sweep_seed: int | None = None
-    # El último sweep: lo que se mandó al Worker y la curva que va devolviendo.
-    # Las descargas salen de aquí, no de los controles, que pudieron cambiar después.
-    experiment: dict[str, Any] | None = None
+    # Los algoritmos palomeados para el sweep (el editor y «Código» usan `algorithm`).
+    sweep_algorithms: list[str] = field(default_factory=lambda: ["fv"])
+    # El último sweep, un experimento por algoritmo: lo que se mandó a su Worker y
+    # la curva que va devolviendo. Las descargas salen de aquí, no de los
+    # controles, que pudieron cambiar después.
+    experiments: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # De cuál de ellos son la tabla, el desglose y las descargas CSV/JSON.
+    detail_algorithm: str | None = None
+    # Curvas despalomeadas en «Mostrar en la gráfica»: "fv:sim", "fv:teo" o "ic".
+    hidden_curves: set[str] = field(default_factory=set)
     # El worker avisa con un mensaje `listo` cuando termino de cargar Pyodide y
     # NumPy. Hasta entonces una ronda pedida espera dentro del worker, y el boton
     # lo dice en vez de fingir que ya esta calculando.
@@ -139,6 +146,11 @@ class AppState:
                 return tab
         self.active_tab_id = self.tabs[0].id
         return self.tabs[0]
+
+    @property
+    def experiment(self) -> dict[str, Any] | None:
+        """El experimento en detalle (tabla, desglose, descargas)."""
+        return self.experiments.get(self.detail_algorithm)
 
     def next_node_id(self) -> str:
         value = f"node_{self.node_counter}"

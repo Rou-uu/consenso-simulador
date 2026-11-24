@@ -29,12 +29,13 @@ archivos (`SWEEP_FILES`): `__init__.py`, `algoritmos.py`, `ronda.py`,
 `barrido.py`, `teoria.py` y `usuario.py`. **No** monta `app.py` ni `models.py`, así que el motor
 no puede depender del editor: si lo hiciera, el Worker no arrancaría.
 
-Se crean dos instancias del mismo archivo:
+Se crean varias instancias del mismo archivo: una para las rondas y, en cada
+sweep, una por algoritmo palomeado (corren a la vez):
 
-| | `ENGINE` (rondas) | `WORKER` (sweep) |
+| | `ENGINE` (rondas) | `WORKERS[clave]` (sweep) |
 |---|---|---|
-| Nace | al cargar la página (`start_engine_worker`) | al pulsar «Ejecutar sweep» (`start_sweep`) |
-| Muere | solo si una ronda pasa de 15 s; entonces se levanta otro | al terminar, fallar o detener el sweep |
+| Nace | al cargar la página (`start_engine_worker`) | al pulsar «Ejecutar sweep» (`start_sweep_worker`, uno por algoritmo) |
+| Muere | solo si una ronda pasa de 15 s; entonces se levanta otro | al terminar o fallar el suyo, o al detener el sweep (`finish_sweep`) |
 | Mensaje | `{type: "ronda", params}` → `{type: "ronda", resultado}` | `{type: "run", params}` → eventos `iteration`… `end` |
 
 Si el algoritmo es el propio, el mensaje trae `params.fuente`. El Worker lo

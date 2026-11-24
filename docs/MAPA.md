@@ -24,7 +24,8 @@ flowchart TB
 - **Solo `app.py` toca la página.** El motor no importa `js` ni `pyodide` y corre
   igual en Python de escritorio.
 - **El motor corre en el Worker.** Lo único que cruza es JSON. Hay dos Workers:
-  uno permanente para las rondas del editor y otro que nace y muere con cada sweep.
+  uno permanente para las rondas del editor y, en cada sweep, uno por algoritmo
+  palomeado, que nacen y mueren con él.
 - **El motor es `back/api.py`**, con los mismos nombres. Ver [MOTOR.md](MOTOR.md).
 
 ## Archivos

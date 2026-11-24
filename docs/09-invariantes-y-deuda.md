@@ -51,7 +51,8 @@ Cosas que están mal y se saben. Antes de arreglarlas, lee la causa.
 | Con aristas paralelas, ambas se marcan igual | `get_adj` colapsa el par en una celda y `apply_propagation` empareja por par de nodos | no sin cambiar el contrato de `propagation` |
 | En un grafo no dirigido solo se resalta una dirección | `apply_propagation` busca el par en el orden en que se dibujó la arista | sí, pero primero hay que decidir qué debe verse |
 | El sweep pierde los límites máximos del formulario | `positive_int` solo aplica el mínimo; el máximo lo impone `_entero` en el Worker y llega como error | sí, tocando los dos lados |
-| Cada sweep vuelve a bajar Pyodide | `finish_sweep` termina el Worker también cuando acaba bien | sí; reutilizarlo como `ENGINE` |
+| Cada sweep vuelve a bajar Pyodide, una vez por algoritmo | `finish_sweep` termina los Workers también cuando acaban bien, y hay uno por algoritmo palomeado | sí; reutilizarlos como `ENGINE`, o turnar los algoritmos en uno solo si la memoria aprieta |
+| El SVG descargado no dice qué curva es cuál | la leyenda es HTML (`#chart-toggles`), fuera del `<svg>` | sí: dibujarla dentro al exportar |
 | La memoria crece durante la sesión | `PROXIES` nunca se vacía | con cuidado: liberar un proxy en uso reproduce el bug de `retain` |
 | Arrastrar nodos salta con cientos de aristas | `render_canvas` es O(E²) por `has_reverse`, en cada `pointermove` | sí: precalcular un `set` de pares |
 | Un `"value": "0.5"` (string) rompe al simular | `Node.from_json` no convierte `value` a número | con cuidado: cambia lo que recibe el motor |

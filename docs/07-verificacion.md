@@ -70,12 +70,14 @@ recorrido en navegador.
 
 `python3 scripts/serve.py`, abrir `http://localhost:8000` con la consola abierta:
 
-1. El overlay desaparece solo y el selector tiene FV, AMP y «Algoritmo propio…».
+1. El overlay desaparece solo y las casillas de «Algoritmo» traen todos los de
+   `ALGORITMOS` y «Algoritmo propio…» (en «Editar red», el selector).
 2. Dos nodos, una arista con Shift, «Simular»: cambian los valores.
 3. AMP con otro `agreed`: los nodos que recibieron toman ese valor.
 4. «Algoritmo propio…» con la plantilla: simula. Un error a propósito muestra su
    línea.
-5. Sweep corto (21 puntos, 200 simulaciones, 5 iteraciones): llega a `5/5`.
+5. Sweep corto (21 puntos, 200 simulaciones, 5 iteraciones) con dos algoritmos
+   palomeados: cada uno llega a `5/5` y despalomear una curva la quita.
 6. Consola sin errores.
 
 ## CI

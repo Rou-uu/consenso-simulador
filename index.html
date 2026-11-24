@@ -72,10 +72,13 @@
           <section class="simulation-section" aria-labelledby="algorithm-heading">
             <h2 id="algorithm-heading">Algoritmo</h2>
             <div class="algorithm-selector">
-              <label class="field-label" for="algorithm-select">Algoritmo</label>
-              <!-- Opciones y campos de parámetros los genera app.py desde
-                   ALGORITMOS (python/simulation/algoritmos.py). Agregar un algoritmo no toca este archivo. -->
-              <select id="algorithm-select" class="algorithm-select"></select>
+              <!-- Opciones, casillas y campos de parámetros los genera app.py desde
+                   ALGORITMOS (python/simulation/algoritmos.py). Agregar un algoritmo no toca este archivo.
+                   El editor y «Código» usan un solo algoritmo (el selector); el
+                   análisis, los que estén palomeados. -->
+              <label class="field-label not-analysis" for="algorithm-select">Algoritmo</label>
+              <select id="algorithm-select" class="algorithm-select not-analysis"></select>
+              <div id="algorithm-checks" class="algorithm-checks only-analysis" role="group" aria-label="Algoritmos a simular"></div>
               <div id="algorithm-params" class="agreed-input-wrapper" hidden></div>
               <!-- El texto de la burbuja lo pone app.py (MODOS_AYUDA) según el modo elegido. -->
               <span class="field-title"><label class="field-label" for="message-mode-select">Paso de mensajes</label><span class="info-tip"><button class="info-btn" type="button" aria-label="Qué es «Paso de mensajes»" aria-describedby="message-mode-help">i</button><span id="message-mode-help" class="info-bubble" role="tooltip"></span></span></span>
@@ -168,9 +171,8 @@
                 <line x1="596" y1="24" x2="596" y2="392"></line>
               </g>
               <g id="chart-grid" class="chart-grid"></g>
-              <path id="chart-confidence-band" class="chart-confidence-band" d=""></path>
-              <path id="chart-mean-line" class="chart-mean-line" d=""></path>
-              <path id="chart-theory-line" class="chart-theory-line" d=""></path>
+              <!-- Una banda, una media y una teórica por algoritmo: las pone render_chart. -->
+              <g id="chart-curves"></g>
               <g id="chart-axis-labels" class="chart-axis-labels"></g>
               <g class="chart-axis-labels">
                 <text x="56" y="412" text-anchor="middle">0</text><text x="236" y="412" text-anchor="middle">0.25</text>
@@ -184,12 +186,16 @@
             </svg>
             <div id="chart-tooltip" class="chart-tooltip" hidden></div>
           </div>
-          <p id="theory-note" class="chart-legend"></p>
+          <!-- Leyenda y casillas a la vez: las arma render_results, una por curva. -->
+          <div id="chart-toggles" class="chart-legend" role="group" aria-label="Mostrar en la gráfica"></div>
+          <label id="detail-picker" class="detail-picker" for="detail-select" hidden>Tabla, desglose y descargas CSV/JSON de
+            <select id="detail-select" class="algorithm-select"></select>
+          </label>
           <div class="results-actions" role="group" aria-labelledby="download-label">
             <span id="download-label" class="results-label">Descargar</span>
             <button id="download-csv-btn" class="quiet-btn" type="button" disabled title="La curva: p, media, intervalo de confianza y simulaciones">CSV</button>
             <button id="download-json-btn" class="quiet-btn" type="button" disabled title="El experimento completo, con su red, algoritmo y semilla, para repetirlo">JSON</button>
-            <button id="download-svg-btn" class="quiet-btn" type="button" disabled title="La gráfica como imagen vectorial">SVG</button>
+            <button id="download-svg-btn" class="quiet-btn" type="button" disabled title="La gráfica como imagen vectorial, con las curvas que estén a la vista">SVG</button>
             <small class="field-help">CSV: la curva. JSON: el experimento completo, para repetirlo. SVG: la gráfica.</small>
           </div>
           <details id="results-table" class="results-table" hidden>

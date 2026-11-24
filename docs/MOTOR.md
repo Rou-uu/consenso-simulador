@@ -11,7 +11,7 @@ que se pueden leer lado a lado. Este documento dice qué hay en cada archivo y
 |---|---|---|
 | `algoritmos.py` | `fv`, `amp`, `fv_batch`, `amp_batch`, `fv_actualizo`, `cambio_el_valor`, `courteous`, `courteous_batch`, `ciclo`, `ciclo_batch`, `ALGORITMOS`, `buscar` | las funciones del algoritmo; `courteous` y `ciclo` son nuevos |
 | `ronda.py` | `get_adj`, `get_values`, `who_gets_message_por_arista`, `who_gets_message_por_emisor`, `who_gets_message`, `propagacion`, `run_round`, `update_graph_data`, `simulate_graph` | `POST /simulate` |
-| `barrido.py` | `who_gets_message_batch_por_arista`, `who_gets_message_batch_por_emisor`, `who_gets_message_batch`, `round_batch`, `run_one_simulation_naive`, `iter_sweep` | `POST /simulate/sweep` y `/simulate/sweep/naive` |
+| `barrido.py` | `who_gets_message_batch_por_arista`, `who_gets_message_batch_por_emisor`, `who_gets_message_batch`, `round_batch`, `run_one_simulation_naive`, `iter_sweep`, `simulacion_del_sweep` | `POST /simulate/sweep` y `/simulate/sweep/naive` (`simulacion_del_sweep` es nueva) |
 | `teoria.py` | `sorteos`, `curva_exacta` | no existe: es nuevo |
 | `usuario.py` | `instalar` | no existe: es nuevo |
 
@@ -91,13 +91,22 @@ todos los `p` y emite la curva con media e IC 95 %.
 - Si no lo tiene, corren una por una con `run_one_simulation_naive`: el mismo
   resultado en promedio, pero de 13 a 40 veces más lento.
 
-**Semilla.** El motor usa el `np.random` global y no recibe semilla: la fija el
-Worker (`np.random.seed(semilla)`) justo antes de llamar a `iter_sweep`, así que
-el motor no cambió. Como el Worker del sweep nace y muere con cada corrida, nada
-más consume ese azar: misma red, algoritmo, parámetros, modo y semilla dan la
-misma curva. `smoke_ui.py` lo comprueba. Si algún día el motor pasa a
-`np.random.default_rng()`, esa comprobación falla y la semilla tendrá que entrar
-como argumento.
+**Semilla.** `iter_sweep(..., semilla=s)` siembra el `np.random` global al
+empezar **cada bloque** (pasada, p) con `semilla_de_bloque(s, pasada, índice de
+p)`. Misma red, algoritmo, parámetros, modo y semilla dan la misma curva. Sin
+`semilla` no siembra nada y se comporta como antes (así lo llama el arnés de
+equivalencia).
+
+Sembrar por bloque es lo que permite **repetir cualquier simulación del sweep**
+sin repetir el sweep: `simulacion_del_sweep` vuelve a sembrar el bloque de esa
+simulación y lo corre con las mismas llamadas, en el mismo orden, que
+`round_batch` (o que el bucle de `run_one_simulation_naive`), guardando cada
+ronda de la fila pedida. Cuesta lo que una pasada en un p, no el sweep entero.
+`smoke_ui.py` comprueba que repetir todas las simulaciones de cada p da
+exactamente la media que reportó el sweep, con y sin `batch`.
+
+Con `batch` no se sabe de quién copió cada nodo (FV lo decide dentro de su
+`batch`); nodo por nodo, sí (`eligio`).
 
 ## Agregar un algoritmo
 
@@ -182,6 +191,8 @@ Cada fila tiene su comentario `# Cambio respecto a api.py` en el código.
 | `who_gets_message`, `who_gets_message_batch` | solo el sorteo por arista | `modo` elige entre `por_arista` y `por_emisor` (broadcast) | comparar modelos de paso de mensajes |
 | `courteous`, `ciclo` | — | protocolos del paper de cinco jugadores | comparar con su cota óptima |
 | `usuario.py` | — | algoritmos pegados en la interfaz, bajo la clave `user_alg` | probar un algoritmo sin tocar el repo |
+| `iter_sweep`, `semilla_de_bloque` | el azar es el `np.random` global tal como esté | con `semilla`, cada bloque (pasada, p) se siembra por separado | repetir el sweep y cualquiera de sus simulaciones |
+| `simulacion_del_sweep` | — | repite una simulación del sweep ronda por ronda | el desglose por rondas del análisis |
 | `teoria.py`, claves `determinista` y `esperanza` | — | discrepancia esperada exacta de una ronda | la columna y la curva teórica del análisis |
 
 Lo que **no** se trajo de `api.py`: el servidor (FastAPI, CORS, `/health`), el

@@ -108,8 +108,8 @@ líneas del motor: `smoke_ui.py` comprueba que coincida con el evento `start` de
 entero entre 0 y `SEED_MAX` (2³² − 1, lo que acepta `np.random.seed`) se rechaza
 en vez de sortear otra en silencio. `start_sweep` siempre manda una: la escrita o
 una sorteada con `random`, que queda en `STATE.sweep_seed` y se muestra en el
-estado del sweep. El Worker la fija con `np.random.seed` justo antes de
-`iter_sweep` (ver [MOTOR](MOTOR.md#el-sweep-iter_sweep)).
+estado del sweep. El Worker se la pasa a `iter_sweep`, que siembra cada bloque
+(pasada, p) por separado (ver [MOTOR](MOTOR.md#el-sweep-iter_sweep)).
 
 La explicación de cada modo de paso de mensajes está en `MODOS_AYUDA`; un modo
 nuevo en el selector necesita su entrada ahí (`smoke_ui` lo vigila).
@@ -131,6 +131,32 @@ Antes de la primera iteración el Worker manda `{type: "teorica", valores, motiv
 puntos. `render_chart` la dibuja punteada y la incluye en la escala;
 `render_results` arma la leyenda (o dice por qué no hay curva) y la tabla
 `#results-table`, una fila por p. El CSV y el JSON la llevan también.
+
+## Desglose por rondas
+
+Inspecciona **las simulaciones que corrió el sweep**, no corridas nuevas. Dos
+deslizadores y un número:
+
+| Control | Qué elige | Qué hace al cambiar |
+|---|---|---|
+| p | uno de los p del sweep | pide esa simulación |
+| Simulación (número, con flechas) | cualquiera de las que corrió ese p: hasta `simulaciones_por_p` (crece con cada pasada) | pide esa simulación; `trace_sim_field` acota lo escrito y no pide nada mientras el campo está vacío, y al salir (`change`) `normalize_trace_sim` deja escrito el número acotado |
+| Ronda | 0 (valores iniciales) a las rondas del experimento | solo redibuja (`render_trace`) |
+
+`request_trace` manda `{type: "traza"}` con todos los parámetros del sweep más
+`indiceP` y `simulacion` al Worker del **editor** (`ENGINE`, que vive todo el
+tiempo; el del sweep muere al terminar), que corre
+`barrido.simulacion_del_sweep`: vuelve a sembrar el bloque de esa simulación y lo
+repite (ver [MOTOR](MOTOR.md#el-sweep-iter_sweep)). Cada pedido lleva un
+número (`TRACE_PEDIDO`) y `receive_trace` descarta las respuestas que llegan tarde
+al arrastrar. Un error del desglose se queda en su panel: no destraba la ronda del
+editor.
+
+La tabla tiene una fila por nodo: valor antes y después, de quién recibió (en
+color, de quién copió, cuando se sabe: solo con algoritmos sin `batch`) y si
+cambió. Arriba,
+la discrepancia de cada ronda; con muchas rondas solo una ventana de 15 alrededor
+de la actual.
 
 ## La pestaña «Código»
 

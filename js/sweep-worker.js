@@ -114,6 +114,36 @@ json.dumps(
 `);
 }
 
+// Una de las simulaciones que corrió el sweep, ronda por ronda, para el desglose
+// del análisis: simulacion_del_sweep vuelve a sembrar su bloque y lo repite.
+async function correrTraza(datos) {
+  const pyodide = await runtimePromise;
+  pyodide.globals.set("_traza_params_json", JSON.stringify(datos.params ?? {}));
+
+  return await pyodide.runPythonAsync(`
+import json
+
+from simulation.barrido import simulacion_del_sweep
+
+_params = json.loads(_traza_params_json)
+json.dumps(
+    simulacion_del_sweep(
+        _params["graph"],
+        algorithm=_params.get("algorithm", "fv"),
+        params=_params.get("algorithmParams") or {},
+        num_p_points=int(_params["numPPoints"]),
+        total_simulations_per_p=int(_params["totalSimulationsPerP"]),
+        iterations=int(_params["iterations"]),
+        rounds=int(_params.get("rounds", 1)),
+        modo=_params.get("modo", "por_arista"),
+        semilla=int(_params["semilla"]),
+        indice_p=int(_params["indiceP"]),
+        simulacion=int(_params["simulacion"]),
+    )
+)
+`);
+}
+
 async function correrBarrido(datos) {
   const pyodide = await runtimePromise;
   pyodide.globals.set("_sweep_params_json", JSON.stringify(datos.params ?? {}));
@@ -128,7 +158,7 @@ from simulation.barrido import iter_sweep
 from simulation.teoria import curva_exacta
 
 _params = json.loads(_sweep_params_json)
-# La curva exacta no usa azar: va antes de fijar la semilla y no la altera.
+# La curva exacta no usa azar, así que no altera la corrida.
 # Un fallo aquí no debe tumbar el sweep, así que viaja como motivo.
 try:
     _teorica, _motivo = curva_exacta(
@@ -140,10 +170,8 @@ except Exception as _error:
     _teorica, _motivo = None, f"no se pudo calcular: {_error}"
 postMessage(to_js({"type": "teorica", "valores": _teorica, "motivo": _motivo},
                   dict_converter=Object.fromEntries))
-# El motor usa el np.random global: fijarlo aquí, justo antes, hace repetible
-# toda la corrida. El Worker nace con cada sweep, así que nada más lo consume.
-if _params.get("semilla") is not None:
-    np.random.seed(int(_params["semilla"]))
+# Con semilla, iter_sweep siembra cada bloque (pasada, p) por separado: así toda
+# la corrida es repetible y el desglose puede repetir cualquier simulación.
 for _message in iter_sweep(
     _params["graph"],
     algorithm=_params.get("algorithm", "fv"),
@@ -153,6 +181,7 @@ for _message in iter_sweep(
     iterations=_params.get("iterations", 50),
     rounds=_params.get("rounds", 1),
     modo=_params.get("modo", "por_arista"),
+    semilla=_params.get("semilla"),
 ):
     postMessage(to_js(_message, dict_converter=Object.fromEntries))
 `);
@@ -160,7 +189,7 @@ for _message in iter_sweep(
 
 self.onmessage = async (event) => {
   const tipo = event.data?.type;
-  if (tipo !== "run" && tipo !== "ronda") {
+  if (tipo !== "run" && tipo !== "ronda" && tipo !== "traza") {
     return;
   }
 
@@ -177,12 +206,19 @@ self.onmessage = async (event) => {
       self.postMessage({ type: "ronda", resultado: await correrRonda(event.data) });
       return;
     }
+    if (tipo === "traza") {
+      self.postMessage({ type: "traza", id: event.data.id, resultado: await correrTraza(event.data) });
+      return;
+    }
     await correrBarrido(event.data);
     self.postMessage({ type: "end" });
   } catch (error) {
     const texto = error instanceof Error ? error.message : String(error);
     self.postMessage({
       type: "error",
+      // Quién lo pidió: un error del desglose no debe destrabar la ronda del editor.
+      para: tipo,
+      id: event.data?.id,
       etapa,
       message: mensajeLegible(error),
       // El traceback completo solo cuando el codigo es de quien usa la app: en

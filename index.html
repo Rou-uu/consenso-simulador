@@ -201,6 +201,33 @@
               </table>
             </div>
           </details>
+          <!-- Desglose de UNA simulación de ejemplo: lo arma app.py (render_trace)
+               con lo que devuelve ronda.traza en el Worker del editor. -->
+          <section id="trace-panel" class="trace-panel" aria-labelledby="trace-heading" hidden>
+            <header>
+              <h3 id="trace-heading">Desglose por rondas</h3>
+              <p class="analysis-subtitle">Las simulaciones que corrió el sweep, una por una: elige p y cuál de ellas, y recorre sus rondas para ver quién cambia. Cada una se repite exacta a partir de la semilla.</p>
+            </header>
+            <div class="trace-sliders">
+              <label class="trace-slider" for="trace-p">p <output id="trace-p-out" for="trace-p"></output>
+                <input id="trace-p" type="range" min="0" max="0" step="1" value="0" />
+              </label>
+              <label class="trace-slider" for="trace-sim">Simulación
+                <span class="trace-number"><input id="trace-sim" type="number" min="1" max="1" step="1" value="1" inputmode="numeric" aria-describedby="trace-sim-out" /><output id="trace-sim-out" for="trace-sim"></output></span>
+              </label>
+              <label class="trace-slider" for="trace-round">Ronda <output id="trace-round-out" for="trace-round"></output>
+                <input id="trace-round" type="range" min="0" max="1" step="1" value="1" />
+              </label>
+            </div>
+            <div id="trace-chips" class="trace-chips" role="group" aria-label="Discrepancia por ronda"></div>
+            <p id="trace-status" class="trace-status" aria-live="polite"></p>
+            <div class="table-scroll">
+              <table class="trace-table">
+                <thead><tr><th scope="col">Nodo</th><th scope="col">Antes</th><th scope="col">Después</th><th scope="col">Recibió de</th><th scope="col">Cambió</th></tr></thead>
+                <tbody id="trace-body"></tbody>
+              </table>
+            </div>
+          </section>
         </section>
 
         <section class="code-main only-code" aria-labelledby="code-heading">

@@ -619,10 +619,9 @@ campo_semilla.value = ""
 
 
 def curva_con(semilla: int, algoritmo: str) -> list:
-    # Lo mismo que hace el Worker: fijar np.random y recorrer iter_sweep.
-    np.random.seed(semilla)
+    # Lo mismo que hace el Worker: pasarle la semilla a iter_sweep.
     eventos = list(iter_sweep(GRAFO_MINIMO, algorithm=algoritmo, num_p_points=5,
-                              total_simulations_per_p=40, iterations=2))
+                              total_simulations_per_p=40, iterations=2, semilla=semilla))
     return eventos[-1]["points"]
 
 
@@ -653,10 +652,10 @@ enviado = FakeWorker.ultimo.enviados[-1]["params"]
 experimento = app.STATE.experiment
 comprobar(experimento is not None and experimento["params"] is enviado, "el experimento guarda lo mismo que se mandó al Worker")
 comprobar(DOCUMENTO.getElementById("download-json-btn").disabled, "sin curva todavía, siguen apagados")
-# Lo que haría el Worker: fijar la semilla, recorrer iter_sweep y publicar cada evento.
-np.random.seed(enviado["semilla"])
+# Lo que haría el Worker: recorrer iter_sweep con la semilla y publicar cada evento.
 eventos = list(iter_sweep(enviado["graph"], algorithm="amp", params=enviado["algorithmParams"],
-                          num_p_points=5, total_simulations_per_p=40, iterations=2, modo=enviado["modo"]))
+                          num_p_points=5, total_simulations_per_p=40, iterations=2, modo=enviado["modo"],
+                          semilla=enviado["semilla"]))
 from simulation.teoria import curva_exacta  # noqa: E402
 
 valores_teoricos, _ = curva_exacta(enviado["graph"], "amp", enviado["algorithmParams"], enviado["modo"], 1,
@@ -691,12 +690,11 @@ comprobar(doc["experimento"]["semilla"] == 99 and doc["algoritmo"]["clave"] == "
           "JSON: lleva semilla, algoritmo y modo")
 comprobar(doc["red"] == enviado["graph"] and set(doc["red"]) == {"directed", "nodes", "edges"},
           "JSON: la red va en el formato de importación")
-np.random.seed(doc["experimento"]["semilla"])
 repetido = list(iter_sweep(doc["red"], algorithm=doc["algoritmo"]["clave"], params=doc["algoritmo"]["parametros"],
                            num_p_points=doc["experimento"]["puntos_p"],
                            total_simulations_per_p=doc["experimento"]["simulaciones_por_p"],
                            iterations=doc["experimento"]["iteraciones"], rounds=doc["experimento"]["rondas"],
-                           modo=doc["modo"]))
+                           modo=doc["modo"], semilla=doc["experimento"]["semilla"]))
 comprobar([pt["media"] for pt in doc["resultado"]["puntos"]] == [pt["mean"] for pt in repetido[-1]["points"]],
           "JSON: con solo lo que trae el archivo se repite la misma curva")
 
@@ -840,6 +838,111 @@ copia, _ = curva_exacta(red([0, 2.5, 7], [(0, 1), (1, 2)]), usuario.CLAVE, {}, "
 original, _ = curva_exacta(red([0, 2.5, 7], [(0, 1), (1, 2)]), "fv", {}, "por_arista", 1, P)
 comprobar(copia == original, "la copia editable de FV trae su `esperanza` y da la misma curva exacta")
 ALGORITMOS.pop(usuario.CLAVE, None)
+
+print("\nEl desglose: las simulaciones del sweep, una por una")
+from simulation.barrido import simulacion_del_sweep  # noqa: E402
+
+grafo_k = red([1, 1, 0, 1, 0], completa(5))
+usuario.instalar(
+    "def r(matrix, values, messages, params):\n"
+    "    out = []\n"
+    "    for i, v in enumerate(messages):\n"
+    "        em = np.where(v != 0)[0]\n"
+    "        out.append((values[i], None) if len(em) == 0 else (values[em[np.random.randint(len(em))]], int(em[0])))\n"
+    "    return out\n"
+    "ALGORITMO = {'nombre': 'sin batch', 'ronda': r}\n"
+)
+for clave, modo in [("fv", "por_arista"), ("courteous", "por_emisor"), (usuario.CLAVE, "por_arista")]:
+    config = dict(num_p_points=4, total_simulations_per_p=12, iterations=3, rounds=2, modo=modo, semilla=7)
+    puntos = list(iter_sweep(grafo_k, clave, {}, **config))[-1]["points"]
+    peor = max(
+        abs(np.mean([simulacion_del_sweep(grafo_k, clave, {}, indice_p=i, simulacion=k, **config)["discrepancias"][-1]
+                     for k in range(12)]) - pt["mean"])
+        for i, pt in enumerate(puntos)
+    )
+    camino = "nodo por nodo" if clave == usuario.CLAVE else "con batch"
+    comprobar(peor < 1e-12, f"{clave} ({modo}, {camino}): repetir las 12 simulaciones de cada p da la media del sweep")
+config = dict(num_p_points=4, total_simulations_per_p=12, iterations=3, rounds=5, modo="por_arista", semilla=7)
+t = simulacion_del_sweep(grafo_k, usuario.CLAVE, {}, indice_p=2, simulacion=10, **config)
+comprobar(len(t["valores"]) == 6 and len(t["rondas"]) == 5 and t["iteracion"] == 2,
+          "5 rondas: 6 estados (con el inicial), 5 desgloses, y dice en qué pasada corrió")
+comprobar(t["discrepancias"] == [max(v) - min(v) for v in t["valores"]], "la discrepancia de cada ronda es max − min")
+comprobar(all(r["eligio"][i] is None or r["eligio"][i] in r["recibio"][i] for r in t["rondas"] for i in range(5)),
+          "nodo por nodo se sabe de quién copió, y siempre es alguien de quien recibió")
+comprobar(simulacion_del_sweep(grafo_k, usuario.CLAVE, {}, indice_p=2, simulacion=10, **config) == t,
+          "repetirla otra vez da exactamente lo mismo")
+quieta = simulacion_del_sweep(grafo_k, "courteous", {}, indice_p=0, simulacion=0, **config)
+comprobar(all(r["recibio"] == [[]] * 5 for r in quieta["rondas"]), "con p = 0 nadie recibe nada")
+for malo in ({"simulacion": 12}, {"indice_p": 4}):
+    try:
+        simulacion_del_sweep(grafo_k, "fv", {}, **{**config, "indice_p": 0, "simulacion": 0, **malo})
+        comprobar(False, f"{malo} debía rechazarse")
+    except ValueError:
+        comprobar(True, f"pedir {malo} fuera de lo que corrió se rechaza")
+ALGORITMOS.pop(usuario.CLAVE, None)
+
+# La interfaz: arranca con la primera curva, ofrece todas las simulaciones y descarta respuestas viejas.
+app.ENGINE = motor = FakeWorker("motor")
+app.STATE.tab.name = "k"
+app.STATE.tab.nodes = [Node(f"n{i}", v) for i, v in enumerate([1, 1, 0, 1, 0])]
+app.STATE.tab.edges = [Edge(f"e{i}{j}", f"n{i}", f"n{j}", "1") for i in range(5) for j in range(5) if i != j]
+app.STATE.algorithm = "fv"
+for campo, valor in {"p-points-input": "11", "simulations-input": "30", "iterations-input": "3",
+                     "rounds-input": "4", "seed-input": "99"}.items():
+    DOCUMENTO.getElementById(campo).value = valor
+app.STATE.sweep_running = False
+app.start_sweep()
+comprobar(DOCUMENTO.getElementById("trace-panel").hidden, "al empezar un sweep se esconde el desglose del anterior")
+enviado = FakeWorker.ultimo.enviados[-1]["params"]
+pasadas = list(iter_sweep(enviado["graph"], algorithm="fv", num_p_points=11, total_simulations_per_p=30,
+                          iterations=3, rounds=4, semilla=99))[1:]
+FakeWorker.ultimo._entregar(pasadas[0])
+pedido = motor.enviados[-1]
+comprobar(not DOCUMENTO.getElementById("trace-panel").hidden and pedido["type"] == "traza",
+          "con la primera curva aparece el desglose y pide una simulación")
+comprobar(DOCUMENTO.getElementById("trace-sim").max == "10", "tras la primera pasada se pueden ver sus 10 simulaciones")
+FakeWorker.ultimo._entregar(pasadas[1])
+FakeWorker.ultimo._entregar(pasadas[2])
+app.finish_sweep()
+comprobar(DOCUMENTO.getElementById("trace-sim").max == "30", "al terminar, las 30 simulaciones por p")
+comprobar(DOCUMENTO.getElementById("trace-sim-out").textContent == "de 30", "y la etiqueta lo dice sin tener que mover nada")
+campo_sim = DOCUMENTO.getElementById("trace-sim")
+for escrito, pedida in [("", None), ("abc", None), ("7", 6), ("5000", 29), ("-3", 0), ("12.9", 11)]:
+    antes = len(motor.enviados)
+    campo_sim.value = escrito
+    app.request_trace()
+    nuevo = motor.enviados[-1]["params"]["simulacion"] if len(motor.enviados) > antes else None
+    comprobar(nuevo == pedida, f"escribir {escrito!r} en el número de simulación pide la {pedida} (desde 0)")
+campo_sim.value = "5000"
+app.normalize_trace_sim()
+comprobar(campo_sim.value == "30", "al salir del campo, un número fuera de rango queda en el máximo")
+campo_sim.value = ""
+app.normalize_trace_sim()
+comprobar(campo_sim.value == "1", "y un campo vacío vuelve a 1")
+campo_sim.value = "1"
+comprobar(DOCUMENTO.getElementById("trace-p").value == "5" and pedido["params"]["indiceP"] == 5
+          and pedido["params"]["simulacion"] == 0 and pedido["params"]["semilla"] == 99,
+          "pide la simulación 1 en el p más cercano a 0.5, con la semilla del sweep")
+resultado = simulacion_del_sweep(pedido["params"]["graph"], "fv", {}, num_p_points=11, total_simulations_per_p=30,
+                                 iterations=3, rounds=4, semilla=99, indice_p=5, simulacion=0)
+DOCUMENTO.getElementById("trace-sim").value = "2"
+app.request_trace()
+app.receive_trace({"type": "traza", "id": pedido["id"], "resultado": json_.dumps(resultado)})
+comprobar(app.TRACE is None, "una respuesta vieja se descarta: el deslizador ya pidió otra")
+app.receive_trace({"type": "traza", "id": app.TRACE_PEDIDO, "resultado": json_.dumps(resultado)})
+comprobar(DOCUMENTO.getElementById("trace-body").innerHTML.count("<tr") == 5, "la tabla tiene una fila por nodo")
+cambios = sum(1 for i in range(5) if resultado["valores"][1][i] != resultado["valores"][0][i])
+comprobar(DOCUMENTO.getElementById("trace-body").innerHTML.count('class="cambio"') == cambios,
+          f"se marcan los {cambios} nodos que cambiaron en la ronda 1")
+app.on_trace_chip(types.SimpleNamespace(target=types.SimpleNamespace(
+    closest=lambda _sel: types.SimpleNamespace(getAttribute=lambda _a: "0"))))
+comprobar(DOCUMENTO.getElementById("trace-status").textContent.startswith("Ronda 0: valores iniciales"),
+          "un clic en la discrepancia de una ronda salta a esa ronda")
+app.STATE.round_running = True
+for oyente in motor.oyentes.get("message", []):
+    oyente(types.SimpleNamespace(data={"type": "error", "para": "traza", "id": app.TRACE_PEDIDO, "message": "x"}))
+comprobar(app.STATE.round_running, "un error del desglose no destraba la ronda del editor")
+app.STATE.round_running = False
 
 print()
 if FALLAS:

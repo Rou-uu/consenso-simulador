@@ -47,6 +47,10 @@ CHART_POINTS: list[dict[str, float]] = []
 PLANTILLA_USUARIO = ""
 #: Un solo proxy para devolver «Copiar» a su texto: uno por clic haría crecer PROXIES.
 COPY_RESET = None
+#: Desglose por rondas: el número del último pedido al Worker (las respuestas
+#: viejas se descartan) y la última simulación recibida.
+TRACE_PEDIDO = 0
+TRACE: dict[str, Any] | None = None
 CHART_MAX_Y = 1.0
 
 
@@ -1335,6 +1339,150 @@ def clear_graph_confirmed() -> bool:
     return True
 
 
+def trace_status(texto: str, *, error: bool = False) -> None:
+    caja = by_id("trace-status")
+    caja.textContent = texto
+    caja.classList.toggle("sweep-error", error)
+
+
+def setup_trace() -> None:
+    """Prepara los deslizadores para el sweep recién empezado y pide la primera traza."""
+    global TRACE
+    experiment = STATE.experiment
+    puntos = experiment["puntos"]
+    TRACE = None
+    deslizador_p = by_id("trace-p")
+    deslizador_p.max = str(len(puntos) - 1)
+    # Empieza en el p más cercano a 0.5: en los extremos casi nunca pasa nada.
+    deslizador_p.value = str(min(range(len(puntos)), key=lambda i: abs(float(puntos[i]["p"]) - 0.5)))
+    by_id("trace-sim").max = str(experiment["simulaciones_por_p"])
+    by_id("trace-sim").value = "1"
+    set_text("trace-sim-out", f"de {miles(experiment['simulaciones_por_p'])}")
+    rondas = int(experiment["params"]["rounds"])
+    by_id("trace-round").max = str(rondas)
+    by_id("trace-round").value = "1"
+    set_hidden("trace-panel", False)
+    request_trace()
+
+
+def request_trace(*_args) -> None:
+    """Pide al Worker del editor que repita la simulación del sweep que marcan los
+    deslizadores de p y simulación."""
+    global TRACE_PEDIDO
+    experiment = STATE.experiment
+    if experiment is None or not experiment["puntos"] or ENGINE is None:
+        return
+    indice_p = int(by_id("trace-p").value)
+    simulacion = trace_sim_field()
+    if simulacion is None:
+        return  # a medio escribir (vacío o no es número): se espera al siguiente tecleo
+    p = float(experiment["puntos"][indice_p]["p"])
+    set_text("trace-p-out", f"{p:.3f}")
+    TRACE_PEDIDO += 1
+    trace_status("Repitiendo la simulación…")
+    # Todo lo del sweep (para rehacer su reparto y sus semillas) más cuál simulación.
+    ENGINE.postMessage(to_js({"type": "traza", "id": TRACE_PEDIDO, "params": {
+        **experiment["params"],
+        "indiceP": indice_p,
+        "simulacion": simulacion - 1,
+    }}, dict_converter=Object.fromEntries))
+
+
+def trace_sim_field() -> int | None:
+    """El número de simulación escrito, acotado a las que corrió el sweep.
+
+    ``None`` si no se puede leer como número: mientras se escribe, el campo pasa
+    por estados vacíos, y eso no debe pedir nada.
+    """
+    try:
+        escrito = int(float(str(by_id("trace-sim").value)))
+    except (ValueError, OverflowError):
+        return None
+    return max(1, min(int(STATE.experiment["simulaciones_por_p"]), escrito))
+
+
+def normalize_trace_sim(*_args) -> None:
+    """Al salir del campo, deja escrito el número que se está mostrando."""
+    if STATE.experiment is None:
+        return
+    simulacion = trace_sim_field()
+    by_id("trace-sim").value = str(simulacion or 1)
+    if simulacion is None:
+        request_trace()
+
+
+def receive_trace(message: dict[str, Any]) -> None:
+    global TRACE
+    if int(message.get("id") or 0) != TRACE_PEDIDO:
+        return  # llegó tarde: el deslizador ya pidió otra
+    TRACE = json.loads(str(message.get("resultado") or "{}"))
+    render_trace()
+
+
+def on_trace_chip(event) -> None:
+    chip = event.target.closest("[data-ronda]")
+    if chip:
+        by_id("trace-round").value = str(chip.getAttribute("data-ronda"))
+        render_trace()
+
+
+def render_trace(*_args) -> None:
+    """La ronda elegida de la traza: discrepancias, resumen y una fila por nodo."""
+    if TRACE is None or STATE.experiment is None:
+        return
+    valores = TRACE["valores"]
+    rondas = len(valores) - 1
+    r = max(0, min(rondas, int(by_id("trace-round").value)))
+    set_text("trace-round-out", f"{r} de {rondas}")
+    discrepancias = TRACE["discrepancias"]
+    # Con muchas rondas, una ventana alrededor de la actual: mil botones no se leen.
+    inicio = max(0, min(r - 7, rondas - 14))
+    ventana = range(inicio, min(rondas, inicio + 14) + 1)
+    chips = ["… " if inicio > 0 else ""]
+    for k in ventana:
+        activo = " active" if k == r else ""
+        chips.append(
+            f'<button class="trace-chip{activo}" type="button" data-ronda="{k}" '
+            f'aria-label="Ronda {k}: discrepancia {number_label(discrepancias[k])}">{discrepancias[k]:.3g}</button>'
+        )
+    if ventana[-1] < rondas:
+        chips.append(" …")
+    by_id("trace-chips").innerHTML = "".join(chips)
+
+    nombres = [str(node["id"]) for node in STATE.experiment["params"]["graph"]["nodes"]]
+    filas = []
+    cambiaron = 0
+    for i, nombre in enumerate(nombres):
+        despues = valores[r][i]
+        if r == 0:
+            filas.append(f"<tr><td>{html.escape(nombre)}</td><td>—</td><td>{number_label(despues)}</td><td>—</td><td></td></tr>")
+            continue
+        antes = valores[r - 1][i]
+        cambio = not math.isclose(antes, despues, abs_tol=1e-12)
+        cambiaron += cambio
+        ronda = TRACE["rondas"][r - 1]
+        eligio = ronda["eligio"][i]
+        recibidos = ", ".join(
+            f'<span class="copio" title="copió su valor">{html.escape(nombres[j])}</span>' if j == eligio
+            else html.escape(nombres[j])
+            for j in ronda["recibio"][i]
+        ) or "—"
+        clase = ' class="cambio"' if cambio else ""
+        filas.append(
+            f"<tr{clase}><td>{html.escape(nombre)}</td><td>{number_label(antes)}</td>"
+            f"<td>{number_label(despues)}</td><td>{recibidos}</td><td>{'●' if cambio else ''}</td></tr>"
+        )
+    by_id("trace-body").innerHTML = "".join(filas)
+    if r == 0:
+        trace_status(f"Ronda 0: valores iniciales. Discrepancia {number_label(discrepancias[0])}.")
+    else:
+        trace_status(
+            f"Ronda {r}: cambiaron {cambiaron} de {len(nombres)} nodos. "
+            f"Discrepancia {number_label(discrepancias[r - 1])} → {number_label(discrepancias[r])}. "
+            f"(Corrió en la pasada {int(TRACE['iteracion']) + 1}.)"
+        )
+
+
 def download(filename: str, content: str, mime: str) -> None:
     blob = Blob.new(
         to_js([content]),
@@ -1679,6 +1827,13 @@ def start_engine_worker() -> None:
             render_controls()
         elif kind == "ronda":
             apply_round(json.loads(str(message.get("resultado") or "{}")))
+        elif kind == "traza":
+            receive_trace(message)
+        elif kind == "error" and message.get("para") == "traza":
+            if int(message.get("id") or 0) == TRACE_PEDIDO:
+                trace_status(f"Error: {message.get('message')}", error=True)
+                if message.get("traza"):
+                    report_engine_error(message)
         elif kind == "error":
             report_engine_error(message)
             finish_round()
@@ -1845,6 +2000,7 @@ def start_sweep(*_args) -> None:
     }
     STATE.sweep_running = True
     set_sweep_inputs_disabled(True)
+    set_hidden("trace-panel", True)
     render_chart([])
     render_downloads()
     by_id("sweep-status").innerHTML = "<p>Cargando motor Python del sweep…</p>"
@@ -1861,12 +2017,20 @@ def start_sweep(*_args) -> None:
             points = [dict(point) for point in message.get("points", [])]
             render_chart(points)
             if STATE.experiment is not None:
+                primera = not STATE.experiment["puntos"]
                 STATE.experiment.update(
                     puntos=points,
                     simulaciones_por_p=int(message["simulationsPerP"]),
                     completo=bool(message.get("done")),
                 )
                 render_downloads()
+                if primera:
+                    setup_trace()
+                else:
+                    # Cada pasada suma simulaciones que ya se pueden inspeccionar.
+                    total = STATE.experiment["simulaciones_por_p"]
+                    by_id("trace-sim").max = str(total)
+                    set_text("trace-sim-out", f"de {miles(total)}")
             render_results()
             completed = " — completo" if message.get("done") else ""
             by_id("sweep-status").innerHTML = (
@@ -1957,6 +2121,11 @@ def bind_events() -> None:
     listen(by_id("sweep-controls"), "input", render_sweep_plan)
     listen(by_id("sweep-run-btn"), "click", start_sweep)
     listen(by_id("sweep-stop-btn"), "click", stop_sweep)
+    listen(by_id("trace-p"), "input", request_trace)
+    listen(by_id("trace-sim"), "input", request_trace)
+    listen(by_id("trace-sim"), "change", normalize_trace_sim)
+    listen(by_id("trace-round"), "input", render_trace)
+    listen(by_id("trace-chips"), "click", on_trace_chip)
     listen(by_id("download-csv-btn"), "click", lambda _event: download_experiment("csv"))
     listen(by_id("download-json-btn"), "click", lambda _event: download_experiment("json"))
     listen(by_id("download-svg-btn"), "click", lambda _event: download_experiment("svg"))

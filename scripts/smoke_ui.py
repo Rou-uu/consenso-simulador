@@ -630,6 +630,73 @@ for algoritmo in ("fv", "amp"):
     comprobar(curva_con(7, algoritmo) == curva_con(7, algoritmo), f"{algoritmo}: misma semilla, misma curva")
     comprobar(curva_con(7, algoritmo) != curva_con(8, algoritmo), f"{algoritmo}: otra semilla, otra curva")
 
+print("\nLas descargas del experimento")
+import csv  # noqa: E402
+import io  # noqa: E402
+import json as json_  # noqa: E402
+import xml.etree.ElementTree as ET  # noqa: E402
+
+app.STATE.experiment = None
+app.render_downloads()
+comprobar(DOCUMENTO.getElementById("download-csv-btn").disabled, "sin experimento, los botones están apagados")
+
+app.STATE.tab.name = "Red / rara"
+app.STATE.tab.nodes = [Node("a", 0), Node("b", 1)]
+app.STATE.tab.edges = [Edge("e", "a", "b", "0.5")]
+campo_semilla.value = "99"
+app.STATE.algorithm = "amp"
+for campo, valor in {"p-points-input": "5", "simulations-input": "40", "iterations-input": "2", "rounds-input": "1"}.items():
+    DOCUMENTO.getElementById(campo).value = valor
+app.STATE.sweep_running = False
+app.start_sweep()
+enviado = FakeWorker.ultimo.enviados[-1]["params"]
+experimento = app.STATE.experiment
+comprobar(experimento is not None and experimento["params"] is enviado, "el experimento guarda lo mismo que se mandó al Worker")
+comprobar(DOCUMENTO.getElementById("download-json-btn").disabled, "sin curva todavía, siguen apagados")
+# Lo que haría el Worker: fijar la semilla, recorrer iter_sweep y publicar cada evento.
+np.random.seed(enviado["semilla"])
+eventos = list(iter_sweep(enviado["graph"], algorithm="amp", params=enviado["algorithmParams"],
+                          num_p_points=5, total_simulations_per_p=40, iterations=2, modo=enviado["modo"]))
+FakeWorker.ultimo._entregar(eventos[1])
+comprobar(not experimento["completo"] and experimento["simulaciones_por_p"] == 20,
+          "a media corrida el experimento queda marcado como incompleto")
+FakeWorker.ultimo._entregar(eventos[2])
+app.finish_sweep()
+comprobar(experimento["completo"] and experimento["puntos"] == eventos[-1]["points"],
+          "al terminar guarda la última curva y la marca completa")
+comprobar(not DOCUMENTO.getElementById("download-svg-btn").disabled, "con curva, se encienden")
+
+nombre = app.experiment_basename(experimento)
+comprobar(nombre == "sweep_Red-rara_amp_semilla99", f"nombre de archivo sin caracteres raros: {nombre}")
+
+filas = list(csv.DictReader(io.StringIO(app.experiment_csv(experimento))))
+comprobar(len(filas) == 5 and list(filas[0]) == ["p", "media", "ic_bajo", "ic_alto", "simulaciones"],
+          "CSV: una fila por p, con encabezado")
+comprobar(all(float(f["media"]) == pt["mean"] for f, pt in zip(filas, eventos[-1]["points"])),
+          "CSV: las medias salen sin perder dígitos")
+
+doc = json_.loads(app.experiment_json(experimento))
+comprobar(doc["experimento"]["semilla"] == 99 and doc["algoritmo"]["clave"] == "amp" and doc["modo"] == enviado["modo"],
+          "JSON: lleva semilla, algoritmo y modo")
+comprobar(doc["red"] == enviado["graph"] and set(doc["red"]) == {"directed", "nodes", "edges"},
+          "JSON: la red va en el formato de importación")
+np.random.seed(doc["experimento"]["semilla"])
+repetido = list(iter_sweep(doc["red"], algorithm=doc["algoritmo"]["clave"], params=doc["algoritmo"]["parametros"],
+                           num_p_points=doc["experimento"]["puntos_p"],
+                           total_simulations_per_p=doc["experimento"]["simulaciones_por_p"],
+                           iterations=doc["experimento"]["iteraciones"], rounds=doc["experimento"]["rondas"],
+                           modo=doc["modo"]))
+comprobar([pt["media"] for pt in doc["resultado"]["puntos"]] == [pt["mean"] for pt in repetido[-1]["points"]],
+          "JSON: con solo lo que trae el archivo se repite la misma curva")
+
+markup = '<svg id="sweep-chart-svg" viewBox="0 0 800 440"><!-- c --><path class="chart-mean-line" d="M 1,2"></path></svg>'
+arbol = ET.fromstring(app.chart_svg(markup).split("\n", 1)[1])
+comprobar(arbol.tag == "{http://www.w3.org/2000/svg}svg", "SVG: XML válido y con su namespace")
+comprobar(arbol[0].tag.endswith("style") and arbol[1].tag.endswith("rect"), "SVG: trae su estilo y su fondo")
+comprobar((arbol.get("width"), arbol.get("height")) == ("800", "440"), "SVG: declara su tamaño")
+app.STATE.algorithm = "fv"
+campo_semilla.value = ""
+
 print()
 if FALLAS:
     print(f"FALLA — {len(FALLAS)} comprobación(es):")

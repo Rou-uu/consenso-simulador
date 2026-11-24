@@ -204,6 +204,13 @@ ALGORITMO = {"nombre": "Promedio de lo recibido", "ronda": promedio}
             </svg>
             <div id="chart-tooltip" class="chart-tooltip" hidden></div>
           </div>
+          <div class="results-actions" role="group" aria-labelledby="download-label">
+            <span id="download-label" class="results-label">Descargar</span>
+            <button id="download-csv-btn" class="quiet-btn" type="button" disabled title="La curva: p, media, intervalo de confianza y simulaciones">CSV</button>
+            <button id="download-json-btn" class="quiet-btn" type="button" disabled title="El experimento completo, con su red, algoritmo y semilla, para repetirlo">JSON</button>
+            <button id="download-svg-btn" class="quiet-btn" type="button" disabled title="La gráfica como imagen vectorial">SVG</button>
+            <small class="field-help">CSV: la curva. JSON: el experimento completo, para repetirlo. SVG: la gráfica.</small>
+          </div>
         </section>
 
         <section id="canvas-container" class="canvas-container only-editor" aria-label="Canvas de grafo" tabindex="0">

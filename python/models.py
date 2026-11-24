@@ -114,6 +114,9 @@ class AppState:
     sweep_running: bool = False
     # La semilla con la que corrió (o corre) el último sweep: la escrita o la sorteada.
     sweep_seed: int | None = None
+    # El último sweep: lo que se mandó al Worker y la curva que va devolviendo.
+    # Las descargas salen de aquí, no de los controles, que pudieron cambiar después.
+    experiment: dict[str, Any] | None = None
     # El worker avisa con un mensaje `listo` cuando termino de cargar Pyodide y
     # NumPy. Hasta entonces una ronda pedida espera dentro del worker, y el boton
     # lo dice en vez de fingir que ya esta calculando.

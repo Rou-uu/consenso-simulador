@@ -121,6 +121,24 @@ es siempre `p` en [0, 1], así que sus marcas y su rejilla están fijas en
 El eje Y usa números redondos (`nice_axis`), y el tooltip
 (`on_chart_pointer_move`) muestra el punto más cercano a `p`.
 
+## Descargas
+
+`start_sweep` guarda en `STATE.experiment` lo que mandó al Worker (red, algoritmo,
+parámetros, modo, código propio y semilla), y cada evento `iteration` le pone la
+curva más reciente y si ya terminó. Las descargas salen de ahí, no de los
+controles: si después cambias la red o el algoritmo, el archivo sigue
+describiendo la corrida que se ve.
+
+| Botón | Constructor | Qué lleva |
+|---|---|---|
+| CSV | `experiment_csv` | `p,media,ic_bajo,ic_alto,simulaciones`, una fila por p |
+| JSON | `experiment_json` | todo lo necesario para repetirlo (la red en el formato de importación) y la curva; `completo` es falso si se detuvo |
+| SVG | `chart_svg` | la gráfica tal como se ve, con su estilo en `CHART_SVG_STYLE` porque fuera de la página no hay `app.css` |
+
+Los constructores son puros y `smoke_ui.py` los prueba, incluido que con solo lo
+que trae el JSON se repite la misma curva. `download()` es lo único que toca el
+navegador (Blob + enlace), y también lo usa «Exportar JSON» del editor.
+
 ## Deuda visible
 
 Está en [09](09-invariantes-y-deuda.md#deuda-conocida). La más notoria: el color

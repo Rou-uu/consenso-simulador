@@ -7,7 +7,9 @@ import html
 import json
 import math
 import random
+import re
 from copy import deepcopy
+from datetime import datetime, timezone
 from typing import Any, Callable
 
 from js import Blob, Object, URL, Worker, document, window
@@ -562,6 +564,110 @@ def on_chart_pointer_move(event) -> None:
     tooltip.style.top = f"{max(4.0, local_y - 68.0):.1f}px"
 
 
+#: El estilo de la gráfica con colores literales: el SVG descargado no ve app.css.
+CHART_SVG_STYLE = (
+    "<style>"
+    ".chart-grid line{stroke:#372f52;stroke-dasharray:3 3}"
+    ".chart-axis{stroke:#9a90b4;stroke-width:1}"
+    ".chart-axis-labels text{fill:#9a90b4;font:11px ui-monospace,Menlo,Consolas,monospace}"
+    ".chart-axis-labels .chart-axis-title{fill:#6e6690;font-size:12px}"
+    ".chart-confidence-band{fill:#6e7cf2;fill-opacity:.18;stroke:none}"
+    ".chart-mean-line{fill:none;stroke:#f4b45c;stroke-width:2.5}"
+    "</style>"
+    '<rect width="100%" height="100%" fill="#1f1b30"/>'
+)
+
+
+def experiment_basename(experiment: dict[str, Any]) -> str:
+    red = re.sub(r"[^A-Za-z0-9_-]+", "-", experiment["red"]).strip("-") or "red"
+    params = experiment["params"]
+    return f"sweep_{red}_{params['algorithm']}_semilla{params['semilla']}"
+
+
+def experiment_csv(experiment: dict[str, Any]) -> str:
+    """La curva, una fila por p. `repr` conserva todos los dígitos del float."""
+    n = experiment["simulaciones_por_p"]
+    filas = ["p,media,ic_bajo,ic_alto,simulaciones"]
+    for punto in experiment["puntos"]:
+        filas.append(
+            f"{float(punto['p'])!r},{float(punto['mean'])!r},"
+            f"{float(punto['ciLow'])!r},{float(punto['ciHigh'])!r},{n}"
+        )
+    return "\n".join(filas) + "\n"
+
+
+def experiment_json(experiment: dict[str, Any]) -> str:
+    """Todo lo necesario para repetir el experimento, más su resultado.
+
+    `red` va en el formato de importación del editor, así que se puede volver a
+    cargar tal cual.
+    """
+    params = experiment["params"]
+    documento = {
+        "fecha": experiment["fecha"],
+        "red": params["graph"],
+        "nombre_red": experiment["red"],
+        "algoritmo": {
+            "clave": params["algorithm"],
+            "nombre": experiment["nombre"],
+            "parametros": params["algorithmParams"],
+            "codigo": params["fuente"],
+        },
+        "modo": params["modo"],
+        "experimento": {
+            "puntos_p": params["numPPoints"],
+            "simulaciones_por_p": params["totalSimulationsPerP"],
+            "iteraciones": params["iterations"],
+            "rondas": params["rounds"],
+            "semilla": params["semilla"],
+        },
+        "resultado": {
+            "completo": experiment["completo"],
+            "simulaciones_por_p": experiment["simulaciones_por_p"],
+            "puntos": [
+                {
+                    "p": float(punto["p"]),
+                    "media": float(punto["mean"]),
+                    "ic_bajo": float(punto["ciLow"]),
+                    "ic_alto": float(punto["ciHigh"]),
+                }
+                for punto in experiment["puntos"]
+            ],
+        },
+    }
+    return json.dumps(documento, indent=2, ensure_ascii=False)
+
+
+def chart_svg(markup: str) -> str:
+    """El SVG de la gráfica, autónomo: con su namespace, su estilo y su fondo."""
+    if "xmlns=" not in markup.split(">", 1)[0]:
+        markup = markup.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"', 1)
+    if " width=" not in markup.split(">", 1)[0]:
+        # Sin tamaño propio, otros programas (Inkscape, LaTeX) lo abren diminuto.
+        markup = markup.replace("<svg", f'<svg width="{CHART_WIDTH:g}" height="440"', 1)
+    apertura, resto = markup.split(">", 1)
+    return f'<?xml version="1.0" encoding="UTF-8"?>\n{apertura}>{CHART_SVG_STYLE}{resto}\n'
+
+
+def render_downloads() -> None:
+    vacio = STATE.experiment is None or not STATE.experiment["puntos"]
+    for element_id in ("download-csv-btn", "download-json-btn", "download-svg-btn"):
+        by_id(element_id).disabled = vacio
+
+
+def download_experiment(formato: str) -> None:
+    experiment = STATE.experiment
+    if experiment is None or not experiment["puntos"]:
+        return
+    nombre = experiment_basename(experiment)
+    if formato == "csv":
+        download(f"{nombre}.csv", experiment_csv(experiment), "text/csv")
+    elif formato == "json":
+        download(f"{nombre}.json", experiment_json(experiment), "application/json")
+    else:
+        download(f"{nombre}.svg", chart_svg(str(by_id("sweep-chart-svg").outerHTML)), "image/svg+xml")
+
+
 def hide_chart_tooltip(*_args) -> None:
     set_hidden("chart-tooltip", True)
 
@@ -1046,16 +1152,15 @@ def clear_graph_confirmed() -> bool:
     return True
 
 
-def export_json(*_args) -> None:
-    content = json.dumps(current_graph_json(), indent=2, ensure_ascii=False)
+def download(filename: str, content: str, mime: str) -> None:
     blob = Blob.new(
         to_js([content]),
-        to_js({"type": "application/json"}, dict_converter=Object.fromEntries),
+        to_js({"type": mime}, dict_converter=Object.fromEntries),
     )
     url = URL.createObjectURL(blob)
     link = document.createElement("a")
     link.href = url
-    link.download = "graph.json"
+    link.download = filename
     link.hidden = True
     document.body.appendChild(link)
     link.click()
@@ -1065,6 +1170,10 @@ def export_json(*_args) -> None:
         link.remove()
 
     window.setTimeout(retain(cleanup), 750)
+
+
+def export_json(*_args) -> None:
+    download("graph.json", json.dumps(current_graph_json(), indent=2, ensure_ascii=False), "application/json")
 
 
 def import_json_click(*_args) -> None:
@@ -1539,9 +1648,19 @@ def start_sweep(*_args) -> None:
         "rounds": sweep_field("rounds-input"),
         "semilla": STATE.sweep_seed,
     }
+    STATE.experiment = {
+        "params": params,
+        "red": STATE.tab.name,
+        "nombre": algoritmo_activo()["nombre"],
+        "fecha": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "puntos": [],
+        "simulaciones_por_p": 0,
+        "completo": False,
+    }
     STATE.sweep_running = True
     set_sweep_inputs_disabled(True)
     render_chart([])
+    render_downloads()
     by_id("sweep-status").innerHTML = "<p>Cargando motor Python del sweep…</p>"
     WORKER = Worker.new(
         "./js/sweep-worker.js",
@@ -1555,6 +1674,13 @@ def start_sweep(*_args) -> None:
         if kind == "iteration":
             points = [dict(point) for point in message.get("points", [])]
             render_chart(points)
+            if STATE.experiment is not None:
+                STATE.experiment.update(
+                    puntos=points,
+                    simulaciones_por_p=int(message["simulationsPerP"]),
+                    completo=bool(message.get("done")),
+                )
+                render_downloads()
             completed = " — completo" if message.get("done") else ""
             by_id("sweep-status").innerHTML = (
                 f'<p>Iteración {int(message["iteration"])+1}/{int(message["totalIterations"])} — '
@@ -1633,6 +1759,9 @@ def bind_events() -> None:
     listen(by_id("sweep-controls"), "input", render_sweep_plan)
     listen(by_id("sweep-run-btn"), "click", start_sweep)
     listen(by_id("sweep-stop-btn"), "click", stop_sweep)
+    listen(by_id("download-csv-btn"), "click", lambda _event: download_experiment("csv"))
+    listen(by_id("download-json-btn"), "click", lambda _event: download_experiment("json"))
+    listen(by_id("download-svg-btn"), "click", lambda _event: download_experiment("svg"))
     listen(by_id("sweep-chart-svg"), "pointermove", on_chart_pointer_move)
     listen(by_id("sweep-chart-svg"), "pointerleave", hide_chart_tooltip)
     listen(by_id("app-dialog-cancel"), "click", close_dialog)
@@ -1645,6 +1774,7 @@ def main() -> None:
     start_engine_worker()
     render_all()
     render_chart([])
+    render_downloads()
     window.graphSimulatorReady = True
 
 

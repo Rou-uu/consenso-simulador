@@ -1716,6 +1716,31 @@ def finish_import(text: str, filename: str) -> None:
         notify(f"Error al leer el archivo JSON: {error}")
 
 
+def load_topology(expresion: str) -> bool:
+    """Lo que corre al aceptar el diálogo: la gráfica entra como un JSON importado."""
+    try:
+        from topologias import generar  # aquí y no arriba: importar networkx tarda y no siempre se usa
+
+        datos = generar(expresion)
+    except Exception as error:
+        dialog_error(f"No se pudo generar: {error}")
+        return False
+    finish_import(json.dumps(datos), expresion.strip())
+    fit_view()
+    return True
+
+
+def open_topology_dialog(*_args) -> None:
+    open_dialog(
+        "Cargar topología",
+        "Escribe un generador de networkx. Por ejemplo: cycle_graph(6), star_graph(5), "
+        "grid_2d_graph(3, 3), complete_graph(4, create_using=DiGraph), "
+        "erdos_renyi_graph(10, 0.3, seed=1).",
+        load_topology,
+        initial="cycle_graph(6)",
+    )
+
+
 def on_file_change(event) -> None:
     file = event.target.files.item(0) if event.target.files.length else None
     if not file:
@@ -2306,6 +2331,7 @@ def bind_events() -> None:
     listen(by_id("close-json-btn"), "click", show_json)
     listen(by_id("import-btn"), "click", import_json_click)
     listen(by_id("file-input"), "change", on_file_change)
+    listen(by_id("topology-btn"), "click", open_topology_dialog)
     listen(by_id("export-btn"), "click", export_json)
     listen(by_id("clear-btn"), "click", clear_graph)
     listen(by_id("algorithm-select"), "change", on_algorithm_change)

@@ -1065,6 +1065,25 @@ comprobar(teorica_cafe != app.theory_color("fv") and svg_cafe != app.chart_svg_s
 app.toggle_theme()
 comprobar(app.STATE.theme == "cafe", "tema: un segundo clic vuelve al café")
 
+# --- Cargar topología ----------------------------------------------------
+print("\nCargar topología: un generador de networkx entra como pestaña nueva")
+import runpy  # noqa: E402
+
+# La conversión (matriz idéntica a la de networkx, nodos sin encimar) se comprueba sola.
+runpy.run_path(str(PROJECT_ROOT / "python" / "topologias.py"), run_name="__main__")
+pestanas = len(app.STATE.tabs)
+comprobar(
+    app.load_topology(" cycle_graph(6) ") and len(app.STATE.tabs) == pestanas + 1
+    and app.STATE.tab.name == "cycle_graph(6)" and not app.STATE.tab.directed
+    and len(app.STATE.tab.nodes) == len(app.STATE.tab.edges) == 6,
+    "cycle_graph(6) abre una pestaña no dirigida con 6 nodos y 6 aristas",
+)
+comprobar(
+    not app.load_topology("no_existe(3)") and len(app.STATE.tabs) == pestanas + 1
+    and "No se pudo generar" in DOCUMENTO.getElementById("app-dialog-message").textContent,
+    "una expresión inválida no abre pestaña y el diálogo dice por qué",
+)
+
 print()
 if FALLAS:
     print(f"FALLA — {len(FALLAS)} comprobación(es):")

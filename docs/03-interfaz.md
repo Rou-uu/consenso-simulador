@@ -85,6 +85,24 @@ pan y zoom: `edges-layer`, `edge-labels-layer`, `nodes-layer` y
 
 Los editores usan el diálogo propio `#app-dialog` (`open_dialog`), no `prompt`.
 
+## Topologías ya armadas
+
+«Topologías…» pide un generador de networkx (`cycle_graph(6)`,
+`grid_2d_graph(3, 3)`, `complete_graph(4, create_using=DiGraph)`,
+`erdos_renyi_graph(10, 0.3, seed=1)`…) y abre la gráfica en una pestaña nueva.
+
+- networkx lo baja `bootstrap.js` en el arranque, junto con NumPy. Se importa
+  hasta la primera topología, por eso esa tarda un poco más.
+- `load_topology` llama a `topologias.generar`, que evalúa la expresión con los
+  nombres de networkx a la vista y devuelve el JSON del contrato; entra por
+  `finish_import`, igual que un archivo importado.
+- Las posiciones salen de `spring_layout`; si deja nodos encimados (gráficas
+  densas), de `circular_layout`. Todos los valores entran en 0 y los pesos en 1,
+  salvo que la gráfica traiga `weight`.
+- Límite: `MAX_NODOS` (200). `topologias.py` no importa `js`: su
+  autocomprobación corre con `python3 python/topologias.py` y `smoke_ui.py` la
+  incluye.
+
 ## Simular
 
 `simulate()` manda `{type: "ronda"}` al Worker `ENGINE` y termina ahí. El

@@ -31,9 +31,10 @@ jobs:
           python-version: "3.12"
 
       # NumPy va fijado: la línea base del arnés se grabó con esta versión y
-      # compara resultados numéricos exactos.
+      # compara resultados numéricos exactos. networkx (solo lo usa
+      # «Topologías…») va en la versión que trae Pyodide 314.0.2.
       - name: Instalar dependencias
-        run: pip install numpy==2.4.5
+        run: pip install numpy==2.4.5 networkx==3.6.1
 
       - name: Arnés de equivalencia
         run: python scripts/equivalencia.py

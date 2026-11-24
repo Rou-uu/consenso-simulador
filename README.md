@@ -14,7 +14,7 @@ Requisitos:
 
 - Python 3.11 o posterior, únicamente para servir los archivos estáticos.
 - Un navegador moderno con WebAssembly y módulos ES.
-- Conexión a internet para descargar Pyodide y NumPy desde jsDelivr. El
+- Conexión a internet para descargar Pyodide, NumPy y networkx desde jsDelivr. El
   navegador puede reutilizarlos desde su caché en visitas posteriores.
 
 Desde la raíz del proyecto:
@@ -64,7 +64,7 @@ El flujo de arranque es:
 1. `index.html` carga `js/bootstrap.js` como módulo ES.
 2. El cargador obtiene Pyodide **314.0.2** desde la distribución fija de
    [jsDelivr](https://cdn.jsdelivr.net/pyodide/v314.0.2/full/).
-3. Pyodide carga NumPy.
+3. Pyodide carga NumPy y networkx.
 4. El cargador descarga `python/app.py`, lo monta en `/python`, agrega esa ruta
    a `sys.path` y lo ejecuta como `__main__`.
 5. Los estados de carga, éxito o error se muestran mediante
@@ -84,6 +84,8 @@ algoritmos de simulación pertenecen a los módulos Python.
 - Usa espacio + arrastre para desplazar el canvas, la rueda para zoom y los
   controles inferiores para zoom/ajuste.
 - Importar abre el JSON en una pestaña nueva; exportar descarga `graph.json`.
+- «Topologías…» abre una gráfica ya armada a partir de un generador de
+  networkx, por ejemplo `cycle_graph(6)` o `grid_2d_graph(3, 3)`.
 
 ## Fidelidad y diferencias conocidas
 
@@ -101,7 +103,7 @@ algoritmos de simulación pertenecen a los módulos Python.
 - No se copió la suite de tests del proyecto de referencia, por decisión de
   alcance. La entrega se verificó con comprobaciones funcionales y recorridos
   reales en navegador.
-- Pyodide y NumPy se descargan desde una versión fija del CDN durante la primera
+- Pyodide, NumPy y networkx se descargan desde una versión fija del CDN durante la primera
   visita. La aplicación no realiza solicitudes a FastAPI ni necesita servidor
   de aplicación.
 

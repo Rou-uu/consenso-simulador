@@ -35,11 +35,12 @@ flowchart TB
 | `index.html` | los `id` que `app.py` busca; la plantilla del algoritmo propio | [01](01-arranque.md) |
 | `css/app.css` | todo el estilo; la paleta son las variables de `:root` | [03](03-interfaz.md) |
 | `fonts/` | STIX Two Text y Fira Sans autoalojadas, con su licencia OFL | [03](03-interfaz.md) |
-| `js/bootstrap.js` | arranque: baja Pyodide y NumPy, monta los `.py`, corre `app.py` | [01](01-arranque.md) |
+| `js/bootstrap.js` | arranque: baja Pyodide, NumPy y networkx, monta los `.py`, corre `app.py` | [01](01-arranque.md) |
 | `js/sweep-worker.js` | el Worker: rondas, sweep y algoritmo propio | [01](01-arranque.md) |
 | `python/app.py` | estado (`STATE`), eventos, dibujo, mensajes al Worker | [03](03-interfaz.md) |
 | `python/models.py` | `Node`, `Edge`, `GraphTab`, `AppState` | [02](02-modelo-de-datos.md) |
 | `python/geometry.py` | coordenadas, curvas de aristas, color por valor | [03](03-interfaz.md) |
+| `python/topologias.py` | «Topologías…»: un generador de networkx → el JSON del editor | [03](03-interfaz.md#topologías-ya-armadas) |
 | `python/simulation/` | el motor | [MOTOR](MOTOR.md) |
 | `notebooks/pruebas.ipynb` | el notebook del original, usando el motor de la app; corre con Jupyter de escritorio | [MOTOR](MOTOR.md) |
 | `scripts/serve.py` | servidor local con los MIME correctos | [00](00-empezar-aqui.md) |

@@ -15,7 +15,7 @@ Cloudflare). Se publica el repositorio tal cual: no hay nada que compilar.
 
 En cada push a `main` (o a mano) corren dos jobs **a la vez**:
 
-- `verificar`: Python 3.12, `numpy==2.4.5`, `equivalencia.py` y `smoke_ui.py`.
+- `verificar`: Python 3.12, `numpy==2.4.5`, `networkx==3.6.1`, `equivalencia.py` y `smoke_ui.py`.
 - `publicar`: `upload-pages-artifact` con `path: .` y `deploy-pages`.
 
 `publicar` **no** depende de `verificar`: un arnés en rojo no detiene la

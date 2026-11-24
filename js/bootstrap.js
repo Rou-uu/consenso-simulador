@@ -5,6 +5,7 @@ const PYTHON_FILES = [
   "python/app.py",
   "python/models.py",
   "python/geometry.py",
+  "python/topologias.py",
   "python/simulation/__init__.py",
   "python/simulation/algoritmos.py",
   "python/simulation/usuario.py",
@@ -59,9 +60,12 @@ async function startApplication() {
   const pythonFilesPromise = Promise.all(PYTHON_FILES.map(fetchPythonFile));
   const pyodide = await loadPyodide({ indexURL: PYODIDE_INDEX_URL });
 
-  showRuntimeState("loading", "Cargando NumPy…");
+  showRuntimeState("loading", "Cargando NumPy y networkx…");
+  // networkx (lo usa «Topologías…») va por la URL de su wheel: pedirlo por nombre
+  // arrastra matplotlib, que el lockfile lista como dependencia.
+  const networkx = pyodide.lockfileBaseUrl + pyodide.lockfile.packages.networkx.file_name;
   const [, pythonFiles] = await Promise.all([
-    pyodide.loadPackage("numpy"),
+    pyodide.loadPackage(["numpy", networkx]),
     pythonFilesPromise,
   ]);
 

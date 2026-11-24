@@ -10,7 +10,8 @@ archivos tal cual y el navegador hace todo lo demás.
 2. `js/bootstrap.js` (`startApplication`):
    - baja Pyodide `314.0.2` desde jsDelivr y, en paralelo, los `.py` de
      `PYTHON_FILES` con `fetch(..., {cache: "no-store"})`;
-   - carga NumPy;
+   - carga NumPy y networkx (este por la URL de su wheel, que sale del lockfile:
+     pedirlo por nombre arrastra matplotlib);
    - escribe los `.py` en `/python/` del sistema de archivos de Pyodide;
    - ejecuta `runpy.run_path("/python/app.py", run_name="__main__")`.
 3. `app.py` → `main()`: `bind_events()` (todos los `listen(...)`),
@@ -18,7 +19,9 @@ archivos tal cual y el navegador hace todo lo demás.
 4. El overlay se oculta. Si algo falla, queda en `data-state="error"` con el
    mensaje en `#loader-detail`.
 
-`PYTHON_FILES` monta 6 archivos: `app.py`, `models.py`, `geometry.py` y, del
+`PYTHON_FILES` monta 7 archivos: `app.py`, `models.py`, `geometry.py`,
+`topologias.py` (que no se importa hasta que se pide una topología, porque
+importar networkx tarda y no siempre se usa) y, del
 motor, solo `__init__.py`, `algoritmos.py` y `usuario.py`. El hilo principal no
 calcula nada: solo lee `ALGORITMOS` para armar el selector.
 

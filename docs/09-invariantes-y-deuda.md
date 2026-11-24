@@ -41,6 +41,7 @@ Cosas que están mal y se saben. Antes de arreglarlas, lee la causa.
 
 | Síntoma | Causa | ¿Seguro arreglarlo? |
 |---|---|---|
+| Una expresión enorme en «Topologías…» (`hypercube_graph(25)`) congela la pestaña | `topologias.generar` hace `eval` en el hilo principal, sin plazo; el límite de nodos se revisa después de generar | sí: generarla en el Worker, como el algoritmo propio |
 | Seleccionar un nodo o arista con un clic no se ve hasta el siguiente redibujado, pero Delete lo borra | `on_canvas_pointer_down` cambia la selección sin llamar a `render_canvas`; el estilo ya existe (`.graph-node.selected` y el color de `edge_style`) | sí, y es urgente: se borra a ciegas. Ojo con redibujar en `pointerdown`: reemplaza el elemento bajo el puntero |
 | La ayuda promete «snap a múltiplos de 10» con Shift, y no existe | el original lo tiene (commit `72768fe` de `../Simulador`) y no se portó; aquí Shift sobre un nodo conecta | sí: portarlo del original |
 | Con aristas paralelas, ambas se marcan igual | `get_adj` colapsa el par en una celda y `apply_propagation` empareja por par de nodos | no sin cambiar el contrato de `propagation` |

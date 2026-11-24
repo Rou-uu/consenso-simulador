@@ -33,7 +33,7 @@ python3 scripts/serve.py          # http://localhost:8000
 
 - **No funciona con doble clic en `index.html`**: los módulos ES, `fetch` y el
   Worker exigen un origen HTTP.
-- **La primera carga tarda** unos segundos: baja Pyodide y NumPy desde jsDelivr.
+- **La primera carga tarda** unos segundos: baja Pyodide, NumPy y networkx desde jsDelivr.
   El Worker baja su propia copia.
 - `serve.py` acepta `--host` y `--port` (por omisión `127.0.0.1` y `8000`).
 
@@ -65,6 +65,7 @@ archivos ahí. Su `back/api.py` es el origen del motor y sus
 |---|---|---|
 | Pyodide | `314.0.2` | 4 sitios: líneas 1 y 3 de `js/bootstrap.js` y de `js/sweep-worker.js` |
 | NumPy para verificar | `2.4.5`, con Python 3.12 | `.github/workflows/pages.yml` |
+| networkx para verificar | `3.6.1`, la que trae Pyodide `314.0.2` | `.github/workflows/pages.yml`; en el navegador sale del lockfile de Pyodide, no está escrita |
 | Límites del sweep | puntos 2–1001, simulaciones 1–50 000, iteraciones 1–1000, rondas 1–1000 | atributos de los `<input>` en `index.html` **y** `_entero(...)` en `barrido.py` |
 | `agreed` | `0.5` | `ALGORITMOS["amp"]["parametros"]` en `algoritmos.py` |
 

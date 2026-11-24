@@ -473,12 +473,12 @@ def edge_style(edge: Edge) -> tuple[str, float, str]:
     if edge.highlight == "updated":
         return "#F2A24A", 4, "edge-animated"
     if edge.highlight == "delivered":
-        return "#A3AEC8", 4, "edge-animated"
+        return "#B5A898", 4, "edge-animated"
     if edge.highlight == "quiet":
-        return "#26335A", 1, ""
+        return "#352C25", 1, ""
     if edge.id == STATE.selected_edge_id:
         return "#7C9DFF", 4, ""
-    return "#6F7CA0", 3, ""
+    return "#7D7063", 3, ""
 
 
 def render_canvas() -> None:
@@ -528,9 +528,9 @@ def render_canvas() -> None:
         fill, text_color = value_color(node.value)
         selected = " selected" if node.id == STATE.selected_node_id else ""
         figura = (
-            f'<rect class="node-circle" x="3" y="3" width="54" height="54" rx="6" fill="{fill}" stroke="#0F1830" stroke-width="3"></rect>'
+            f'<rect class="node-circle" x="3" y="3" width="54" height="54" rx="6" fill="{fill}" stroke="#15120F" stroke-width="3"></rect>'
             if node.id == lider else
-            f'<circle class="node-circle" cx="30" cy="30" r="30" fill="{fill}" stroke="#0F1830" stroke-width="3"></circle>'
+            f'<circle class="node-circle" cx="30" cy="30" r="30" fill="{fill}" stroke="#15120F" stroke-width="3"></circle>'
         )
         node_parts.append(
             f'<g class="graph-node{selected}" data-node-id="{html.escape(node.id)}" '
@@ -885,15 +885,15 @@ def on_chart_pointer_move(event) -> None:
 #: El estilo de la gráfica con colores literales: el SVG descargado no ve app.css.
 CHART_SVG_STYLE = (
     "<style>"
-    ".chart-grid line{stroke:#26335a}"
-    ".chart-axis{stroke:#e9edf5;stroke-width:1}"
-    ".chart-axis-labels text{fill:#a3aec8;font:13px 'STIX Two Text',Georgia,'Times New Roman',serif}"
-    ".chart-axis-labels .chart-axis-title{fill:#e9edf5;font-size:14px}"
+    ".chart-grid line{stroke:#352c25}"
+    ".chart-axis{stroke:#f1ebe3;stroke-width:1}"
+    ".chart-axis-labels text{fill:#b5a898;font:13px 'STIX Two Text',Georgia,'Times New Roman',serif}"
+    ".chart-axis-labels .chart-axis-title{fill:#f1ebe3;font-size:14px}"
     ".chart-confidence-band{fill:#7c9dff;fill-opacity:.18;stroke:none}"
     ".chart-mean-line{fill:none;stroke:#f2a24a;stroke-width:2.5}"
-    ".chart-theory-line{fill:none;stroke:#a3aec8;stroke-width:1.5;stroke-dasharray:6 5}"
+    ".chart-theory-line{fill:none;stroke:#b5a898;stroke-width:1.5;stroke-dasharray:6 5}"
     "</style>"
-    '<rect width="100%" height="100%" fill="#0f1830"/>'
+    '<rect width="100%" height="100%" fill="#15120f"/>'
 )
 
 

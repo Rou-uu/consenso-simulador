@@ -27,7 +27,7 @@ def value_color(value: object) -> tuple[str, str]:
     amount = clamp(amount, 0.0, 1.0)
     rgb = tuple(round(a + (b - a) * amount) for a, b in zip(V0, V1))
     luminance = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255
-    text = "#0F1830" if luminance > 0.5 else "#FFFFFF"
+    text = "#15120F" if luminance > 0.5 else "#FFFFFF"
     return f"rgb({rgb[0]}, {rgb[1]}, {rgb[2]})", text
 
 

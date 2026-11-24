@@ -3,18 +3,18 @@
    aquí (nodos, aristas y la gráfica descargada) están en app.py y geometry.py. */
 :root {
   color-scheme: dark;
-  --page: #0f1830;
-  --side: #0b1226;
-  --field: #18244a;
-  --sunken: #0b1226;
-  --line: #26335a;
-  --line-strong: #5c6c99;
-  --ink: #e9edf5;
-  --muted: #a3aec8;
-  --faint: #6f7ca0;
+  --page: #15120f;
+  --side: #0f0c0a;
+  --field: #231d18;
+  --sunken: #0f0c0a;
+  --line: #352c25;
+  --line-strong: #86766a;
+  --ink: #f1ebe3;
+  --muted: #b5a898;
+  --faint: #7d7063;
   /* Los dos únicos colores: el valor 0 y el valor 1 de un nodo. */
   --v0: #7c9dff;
-  --on-v0: #0f1830;
+  --on-v0: #15120f;
   --v1: #f2a24a;
   --v0-soft: rgb(124 157 255 / 14%);
   --v0-ring: rgb(124 157 255 / 35%);
@@ -24,9 +24,9 @@
   --danger-soft: rgb(240 114 138 / 12%);
   --action: var(--ink);
   --action-hover: #ffffff;
-  --on-action: #0f1830;
+  --on-action: #15120f;
   --shadow: 0 8px 28px rgb(0 0 0 / 50%);
-  --scrim: rgb(4 8 20 / 70%);
+  --scrim: rgb(8 6 4 / 72%);
 
   --radius: 4px;
   --serif: "STIX Two Text", "STIX Two", Charter, Georgia, "Times New Roman", serif;

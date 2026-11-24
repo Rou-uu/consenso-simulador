@@ -147,7 +147,7 @@ algoritmo.
 
 Cada algoritmo tiene su color (`curve_color`, por su lugar en el registro: no
 cambia según cuáles estén palomeados); su teórica va punteada y en el mismo
-color oscurecido (`theory_color`). El color va en `style`, no como atributo, para
+color aclarado (`theory_color`). El color va en `style`, no como atributo, para
 que el CSS de la clase no lo pise. `#chart-toggles` es la leyenda y a la vez las
 casillas de «qué se muestra»: una por curva más la del IC. Lo despalomeado queda
 en `STATE.hidden_curves` (`"fv:sim"`, `"fv:teo"`, `"ic"`) y no cuenta para la

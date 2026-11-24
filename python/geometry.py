@@ -9,8 +9,8 @@ from models import Edge, Node
 
 
 NODE_RADIUS = 30.0
-V0 = (47, 91, 216)
-V1 = (232, 135, 30)
+V0 = (124, 157, 255)
+V1 = (242, 162, 74)
 
 
 def clamp(value: float, low: float, high: float) -> float:
@@ -27,7 +27,7 @@ def value_color(value: object) -> tuple[str, str]:
     amount = clamp(amount, 0.0, 1.0)
     rgb = tuple(round(a + (b - a) * amount) for a, b in zip(V0, V1))
     luminance = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255
-    text = "#14213D" if luminance > 0.5 else "#FFFFFF"
+    text = "#0F1830" if luminance > 0.5 else "#FFFFFF"
     return f"rgb({rgb[0]}, {rgb[1]}, {rgb[2]})", text
 
 

@@ -2,30 +2,31 @@
    archivo solo usa estas variables. Los literales que el SVG necesita fuera de
    aquí (nodos, aristas y la gráfica descargada) están en app.py y geometry.py. */
 :root {
-  --page: #ffffff;
-  --side: #f4f6f9;
-  --field: #ffffff;
-  --sunken: #f1f3f7;
-  --line: #d5dae3;
-  --line-strong: #8690a2;
-  --ink: #14213d;
-  --muted: #5b6577;
-  --faint: #8a93a3;
+  color-scheme: dark;
+  --page: #0f1830;
+  --side: #0b1226;
+  --field: #18244a;
+  --sunken: #0b1226;
+  --line: #26335a;
+  --line-strong: #5c6c99;
+  --ink: #e9edf5;
+  --muted: #a3aec8;
+  --faint: #6f7ca0;
   /* Los dos únicos colores: el valor 0 y el valor 1 de un nodo. */
-  --v0: #2f5bd8;
-  --on-v0: #ffffff;
-  --v1: #e8871e;
-  --v0-soft: rgb(47 91 216 / 10%);
-  --v0-ring: rgb(47 91 216 / 30%);
-  --v1-soft: rgb(232 135 30 / 16%);
-  --danger: #c2334d;
-  --on-danger: #ffffff;
-  --danger-soft: rgb(194 51 77 / 9%);
+  --v0: #7c9dff;
+  --on-v0: #0f1830;
+  --v1: #f2a24a;
+  --v0-soft: rgb(124 157 255 / 14%);
+  --v0-ring: rgb(124 157 255 / 35%);
+  --v1-soft: rgb(242 162 74 / 18%);
+  --danger: #f0728a;
+  --on-danger: #2a0e17;
+  --danger-soft: rgb(240 114 138 / 12%);
   --action: var(--ink);
-  --action-hover: #24365f;
-  --on-action: #ffffff;
-  --shadow: 0 6px 24px rgb(20 33 61 / 14%);
-  --scrim: rgb(20 33 61 / 40%);
+  --action-hover: #ffffff;
+  --on-action: #0f1830;
+  --shadow: 0 8px 28px rgb(0 0 0 / 50%);
+  --scrim: rgb(4 8 20 / 70%);
 
   --radius: 4px;
   --serif: "STIX Two Text", "STIX Two", Charter, Georgia, "Times New Roman", serif;

@@ -123,6 +123,15 @@ es siempre `p` en [0, 1], así que sus marcas y su rejilla están fijas en
 El eje Y usa números redondos (`nice_axis`), y el tooltip
 (`on_chart_pointer_move`) muestra el punto más cercano a `p`.
 
+## Tabla y curva teórica
+
+Antes de la primera iteración el Worker manda `{type: "teorica", valores, motivo}`
+(ver [MOTOR](MOTOR.md#la-curva-teórica-teoriapy)); se guarda en
+`STATE.experiment`. `theory_for(points)` la devuelve solo si corresponde a esos
+puntos. `render_chart` la dibuja punteada y la incluye en la escala;
+`render_results` arma la leyenda (o dice por qué no hay curva) y la tabla
+`#results-table`, una fila por p. El CSV y el JSON la llevan también.
+
 ## La pestaña «Código»
 
 `render_code_view()` decide qué se ve: con «Algoritmo propio…» elegido, el editor

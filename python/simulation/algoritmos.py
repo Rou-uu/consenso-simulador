@@ -23,6 +23,11 @@ Un algoritmo es una entrada de ``ALGORITMOS`` con estas claves:
                 cómo se dibuja: la interfaz lo pinta como cuadrado.
 ``parametros``  (opcional) ``{nombre: (etiqueta, valor_por_omision)}``. La
                 interfaz arma un campo por parámetro y los manda en ``params``.
+``determinista`` (opcional) ``True`` si ``batch`` no usa azar. Permite calcular
+                la discrepancia exacta de una ronda (``teoria.py``).
+``esperanza``   (opcional) ``esperanza(vals, fired, params)``: para un algoritmo
+                con azar propio, la discrepancia esperada de cada fila, dado qué
+                aristas dispararon. Lo mismo que ``determinista``, para FV.
 """
 
 import numpy as np
@@ -76,6 +81,25 @@ def fv_batch(vals: np.ndarray, fired: np.ndarray, params: dict) -> np.ndarray:
 def amp_batch(vals: np.ndarray, fired: np.ndarray, params: dict) -> np.ndarray:
     recibio = fired.any(axis=1)
     return np.where(recibio, params.get("agreed", 0.5), vals)
+
+
+def fv_esperanza(vals: np.ndarray, fired: np.ndarray, params: dict) -> np.ndarray:
+    """Discrepancia esperada de FV tras la ronda, dado qué aristas dispararon.
+
+    Cada nodo que recibió copia el valor de un emisor al azar, independiente de
+    los demás. Así P(max <= t) = prod_i P(X_i <= t), y con los valores posibles
+    t_0 < t_1 < ... se tiene E[max - min] = sum_k (t_{k+1} - t_k) P(min <= t_k < max).
+    """
+    umbrales = np.unique(vals)
+    recibio = fired.any(axis=1)  # (S, n)
+    emisores = fired.sum(axis=1)  # (S, n)
+    debajo = (vals[:, :, None] <= umbrales).astype(float)  # (S, n, T): v_j <= t
+    # fired[s, source, target]: de los emisores de i, cuántos tienen valor <= t.
+    cuenta = np.einsum("sji,sjt->sit", fired.astype(float), debajo)
+    p_le = np.where(recibio[:, :, None], cuenta / np.maximum(emisores, 1)[:, :, None], debajo)
+    max_le = p_le.prod(axis=1)[:, :-1]  # P(max <= t_k)
+    min_gt = (1 - p_le).prod(axis=1)[:, :-1]  # P(min > t_k)
+    return ((1 - max_le - min_gt) * np.diff(umbrales)).sum(axis=1)
 
 
 def fv_actualizo(nuevos: list, valores: np.ndarray, target: int, source: int) -> bool:
@@ -198,23 +222,27 @@ ALGORITMOS = {
         "ronda": fv,
         "batch": fv_batch,
         "actualizo": fv_actualizo,
+        "esperanza": fv_esperanza,
     },
     "amp": {
         "nombre": "Agreement (AMP)",
         "ronda": amp,
         "batch": amp_batch,
         "parametros": {"agreed": ("Valor de consenso (<code>agreed</code>)", 0.5)},
+        "determinista": True,
     },
     "courteous": {
         "nombre": "Courteous",
         "ronda": courteous,
         "batch": courteous_batch,
+        "determinista": True,
     },
     "ciclo": {
         "nombre": "Ciclo",
         "ronda": ciclo,
         "batch": ciclo_batch,
         "lider": True,
+        "determinista": True,
     },
 }
 

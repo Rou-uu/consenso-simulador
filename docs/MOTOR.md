@@ -12,6 +12,7 @@ que se pueden leer lado a lado. Este documento dice qué hay en cada archivo y
 | `algoritmos.py` | `fv`, `amp`, `fv_batch`, `amp_batch`, `fv_actualizo`, `cambio_el_valor`, `courteous`, `courteous_batch`, `ciclo`, `ciclo_batch`, `ALGORITMOS`, `buscar` | las funciones del algoritmo; `courteous` y `ciclo` son nuevos |
 | `ronda.py` | `get_adj`, `get_values`, `who_gets_message_por_arista`, `who_gets_message_por_emisor`, `who_gets_message`, `propagacion`, `run_round`, `update_graph_data`, `simulate_graph` | `POST /simulate` |
 | `barrido.py` | `who_gets_message_batch_por_arista`, `who_gets_message_batch_por_emisor`, `who_gets_message_batch`, `round_batch`, `run_one_simulation_naive`, `iter_sweep` | `POST /simulate/sweep` y `/simulate/sweep/naive` |
+| `teoria.py` | `sorteos`, `curva_exacta` | no existe: es nuevo |
 | `usuario.py` | `instalar` | no existe: es nuevo |
 
 Quién llama a qué:
@@ -121,6 +122,8 @@ Claves opcionales:
 | `actualizo` | regla de coloreado de aristas | «el valor del target cambió» |
 | `parametros` | `{"nombre": ("etiqueta", por_omision)}`; la interfaz arma los campos | sin campos |
 | `lider` | `True` si el último nodo es el líder; el editor lo dibuja como cuadrado | todos los nodos son círculos |
+| `determinista` | `True` si `batch` no usa azar: habilita la curva teórica exacta | sin curva teórica |
+| `esperanza` | `esperanza(vals, fired, params)`: discrepancia esperada por fila para un algoritmo con azar propio (como FV) | sin curva teórica |
 
 Escribe `ronda`, `batch` y `actualizo` como `def` en `algoritmos.py`, no como
 `lambda`: la pestaña «Código» los muestra y los copia con `inspect.getsource`.
@@ -129,6 +132,36 @@ Para que el arnés lo cubra, agrega su clave a la tupla `ALGORITMOS` de
 `scripts/equivalencia.py` y regrábalo (agregar claves no altera las viejas). Un
 algoritmo que no acepta cualquier grafo, como `courteous` o `ciclo`, lleva casos
 propios en vez de ir en esa tupla.
+
+## La curva teórica (`teoria.py`)
+
+`curva_exacta` da la discrepancia esperada **exacta** tras **una** ronda, sin
+simular. En el sweep cada sorteo de entrega sale con probabilidad `p`; con `m`
+sorteos independientes hay `2^m` patrones, y uno con `k` éxitos pesa
+`p^k (1-p)^(m-k)`. Se corre el algoritmo sobre todos los patrones a la vez (con
+su `batch`, que ya recibe `fired[s, source, target]`) y la curva es el polinomio
+`sum_k c_k p^k (1-p)^(m-k)`.
+
+Los sorteos son los del sweep: uno por arista en dirigidos, uno por par en no
+dirigidos (`a->b` y `b->a` comparten), uno por emisor en broadcast. Para FV, cuyo
+`batch` usa azar, `fv_esperanza` da la esperanza exacta sobre ese azar: cada nodo
+elige su emisor independiente de los demás, así que `P(max <= t)` es un producto.
+
+Coincide con las fórmulas de los papers donde están demostradas (`smoke_ui.py`
+lo comprueba al error de redondeo), y con la simulación en otras redes:
+
+| Algoritmo | Red y entrada | Modo | Curva |
+|---|---|---|---|
+| FV | 2 nodos, dos arcos (o broadcast) | por arista | `p² + q²` |
+| AMP | 2 nodos, dos arcos, `agreed` entre los valores | por arista | `q` |
+| FV | 2 nodos, **no dirigido** | por arista | `1`: el sorteo compartido hace que ambos reciban o ninguno |
+| Courteous | completa, `(0,0,1,1,1)` | broadcast | `C(p)` |
+| Ciclo | completa, `(0,0,0,1,0)` | broadcast | `A(p)` |
+
+No hay curva (y el análisis dice por qué) con más de una ronda, con más de
+`2^14` patrones, con lazos, o si el algoritmo no declara `determinista` ni
+`esperanza`. El Worker la calcula antes de fijar la semilla; no usa azar, así que
+no altera la corrida.
 
 ## Todo lo que cambió respecto a `api.py`
 
@@ -149,6 +182,7 @@ Cada fila tiene su comentario `# Cambio respecto a api.py` en el código.
 | `who_gets_message`, `who_gets_message_batch` | solo el sorteo por arista | `modo` elige entre `por_arista` y `por_emisor` (broadcast) | comparar modelos de paso de mensajes |
 | `courteous`, `ciclo` | — | protocolos del paper de cinco jugadores | comparar con su cota óptima |
 | `usuario.py` | — | algoritmos pegados en la interfaz, bajo la clave `user_alg` | probar un algoritmo sin tocar el repo |
+| `teoria.py`, claves `determinista` y `esperanza` | — | discrepancia esperada exacta de una ronda | la columna y la curva teórica del análisis |
 
 Lo que **no** se trajo de `api.py`: el servidor (FastAPI, CORS, `/health`), el
 `delay_ms` del stream y el endpoint `/simulate/sweep/naive` como algo aparte

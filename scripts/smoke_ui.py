@@ -657,6 +657,11 @@ comprobar(DOCUMENTO.getElementById("download-json-btn").disabled, "sin curva tod
 np.random.seed(enviado["semilla"])
 eventos = list(iter_sweep(enviado["graph"], algorithm="amp", params=enviado["algorithmParams"],
                           num_p_points=5, total_simulations_per_p=40, iterations=2, modo=enviado["modo"]))
+from simulation.teoria import curva_exacta  # noqa: E402
+
+valores_teoricos, _ = curva_exacta(enviado["graph"], "amp", enviado["algorithmParams"], enviado["modo"], 1,
+                                   np.linspace(0, 1, 5))
+FakeWorker.ultimo._entregar({"type": "teorica", "valores": valores_teoricos, "motivo": ""})
 FakeWorker.ultimo._entregar(eventos[1])
 comprobar(not experimento["completo"] and experimento["simulaciones_por_p"] == 20,
           "a media corrida el experimento queda marcado como incompleto")
@@ -670,10 +675,16 @@ nombre = app.experiment_basename(experimento)
 comprobar(nombre == "sweep_Red-rara_amp_semilla99", f"nombre de archivo sin caracteres raros: {nombre}")
 
 filas = list(csv.DictReader(io.StringIO(app.experiment_csv(experimento))))
-comprobar(len(filas) == 5 and list(filas[0]) == ["p", "media", "ic_bajo", "ic_alto", "simulaciones"],
+comprobar(len(filas) == 5 and list(filas[0]) == ["p", "media", "ic_bajo", "ic_alto", "simulaciones", "teorica"],
           "CSV: una fila por p, con encabezado")
 comprobar(all(float(f["media"]) == pt["mean"] for f, pt in zip(filas, eventos[-1]["points"])),
           "CSV: las medias salen sin perder dígitos")
+comprobar([float(f["teorica"]) for f in filas] == valores_teoricos, "CSV: trae la curva teórica")
+comprobar(DOCUMENTO.getElementById("results-table-body").innerHTML.count("<tr>") == 5
+          and "sin-dato" not in DOCUMENTO.getElementById("results-table-body").innerHTML,
+          "la tabla tiene una fila por p, con su valor teórico")
+comprobar(DOCUMENTO.getElementById("chart-theory-line").getAttribute("d").startswith("M"),
+          "la curva teórica se dibuja en la gráfica")
 
 doc = json_.loads(app.experiment_json(experimento))
 comprobar(doc["experimento"]["semilla"] == 99 and doc["algoritmo"]["clave"] == "amp" and doc["modo"] == enviado["modo"],
@@ -764,6 +775,71 @@ app.submit_dialog()
 comprobar(editor.value == app.codigo_de("fv") and app.STATE.algorithm == usuario.CLAVE, "aceptar lo reemplaza")
 app.STATE.algorithm = "fv"
 app.change_view("analysis")
+
+print("\nLa discrepancia teórica: exacta para una ronda")
+
+
+def red(valores, aristas, dirigida=True):
+    return {"directed": dirigida, "nodes": [{"id": f"n{i}", "value": v} for i, v in enumerate(valores)],
+            "edges": [{"id": f"e{k}", "source": f"n{a}", "target": f"n{b}", "weight": "1"}
+                      for k, (a, b) in enumerate(aristas)]}
+
+
+def completa(n):
+    return [(i, j) for i in range(n) for j in range(n) if i != j]
+
+
+P = np.linspace(0, 1, 11)
+Q = 1 - P
+# Las fórmulas de los papers, en los casos donde están demostradas.
+for nombre, grafo_, clave, modo, formula in [
+    ("FV, 2 nodos con dos arcos: p² + q²", red([0, 1], completa(2)), "fv", "por_arista", P**2 + Q**2),
+    ("FV, 2 nodos en broadcast: p² + q²", red([0, 1], completa(2)), "fv", "por_emisor", P**2 + Q**2),
+    ("AMP, 2 nodos con dos arcos: q", red([0, 1], completa(2)), "amp", "por_arista", Q),
+    ("FV, 2 nodos no dirigido: el sorteo compartido da 1", red([0, 1], [(0, 1)], False), "fv", "por_arista", P * 0 + 1),
+    ("Courteous, (0,0,1,1,1) en broadcast: C(p)", red([0, 0, 1, 1, 1], completa(5)), "courteous", "por_emisor",
+     Q**5 + 6 * P**2 * Q**3 + 3 * P**4 * Q),
+    ("Ciclo, (0,0,0,1,0) en broadcast: A(p)", red([0, 0, 0, 1, 0], completa(5)), "ciclo", "por_emisor",
+     Q - 2 * P * Q**4),
+]:
+    valores, _ = curva_exacta(grafo_, clave, {}, modo, 1, P)
+    comprobar(np.allclose(valores, formula, atol=1e-12), nombre)
+
+# Fuera de esos casos, contra la simulación (semilla fija: no es azaroso).
+for nombre, grafo_, clave, modo in [
+    ("FV, valores 0 / 2.5 / 7, no dirigido", red([0, 2.5, 7], [(0, 1), (1, 2), (0, 2)], False), "fv", "por_arista"),
+    ("FV, dirigida irregular, broadcast", red([3, 0, 1, 5], [(0, 1), (0, 2), (0, 3), (1, 0), (2, 3)]), "fv", "por_emisor"),
+    ("AMP, ciclo de 4", red([0, 1, 0.2, 0.9], [(0, 1), (1, 2), (2, 3), (3, 0)]), "amp", "por_arista"),
+    ("Courteous, completa no dirigida", red([0, 1, 1, 0, 1], [(i, j) for i in range(5) for j in range(i + 1, 5)], False),
+     "courteous", "por_arista"),
+    ("Ciclo, otra entrada en broadcast", red([1, 0, 1, 1, 0], completa(5)), "ciclo", "por_emisor"),
+]:
+    np.random.seed(1)
+    puntos = list(iter_sweep(grafo_, algorithm=clave, num_p_points=11, total_simulations_per_p=20000,
+                             iterations=1, modo=modo))[-1]["points"]
+    valores, motivo = curva_exacta(grafo_, clave, {}, modo, 1, [pt["p"] for pt in puntos])
+    if valores is None:
+        comprobar(False, f"{nombre}: no hubo curva exacta ({motivo})")
+        continue
+    peor = max(abs(pt["mean"] - v) / max((pt["ciHigh"] - pt["ciLow"]) / 3.92, 1e-12) for pt, v in zip(puntos, valores))
+    comprobar(peor < 4, f"{nombre}: la simulación cae a {peor:.1f} desviaciones de la exacta")
+
+# Cuándo no hay curva, y que lo diga.
+for nombre, argumentos, pista in [
+    ("con más de una ronda", (red([0, 1], completa(2)), "fv", {}, "por_arista", 2), "1 ronda"),
+    ("con demasiados patrones", (red([0, 1, 0, 1, 0], completa(5)), "fv", {}, "por_arista", 1), "2^20"),
+    ("con lazos", (red([0, 1], [(0, 0), (0, 1)]), "fv", {}, "por_arista", 1), "lazos"),
+]:
+    valores, motivo = curva_exacta(*argumentos, P)
+    comprobar(valores is None and pista in motivo, f"sin curva {nombre}, y lo dice: {motivo!r}")
+usuario.instalar("def r(m, v, msg, p):\n    return [(x, None) for x in v]\nALGORITMO = {'nombre': 'x', 'ronda': r}")
+valores, motivo = curva_exacta(red([0, 1], completa(2)), usuario.CLAVE, {}, "por_arista", 1, P)
+comprobar(valores is None and "no declara" in motivo, "un algoritmo que no declara cómo calcularla no inventa curva")
+usuario.instalar(app.codigo_de("fv"))
+copia, _ = curva_exacta(red([0, 2.5, 7], [(0, 1), (1, 2)]), usuario.CLAVE, {}, "por_arista", 1, P)
+original, _ = curva_exacta(red([0, 2.5, 7], [(0, 1), (1, 2)]), "fv", {}, "por_arista", 1, P)
+comprobar(copia == original, "la copia editable de FV trae su `esperanza` y da la misma curva exacta")
+ALGORITMOS.pop(usuario.CLAVE, None)
 
 print()
 if FALLAS:

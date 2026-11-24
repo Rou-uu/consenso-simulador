@@ -24,9 +24,9 @@ calcula nada: solo lee `ALGORITMOS` para armar el selector.
 
 ## Los Workers
 
-`js/sweep-worker.js` es un Worker con su **propio** Pyodide y NumPy. Monta 5
+`js/sweep-worker.js` es un Worker con su **propio** Pyodide y NumPy. Monta 6
 archivos (`SWEEP_FILES`): `__init__.py`, `algoritmos.py`, `ronda.py`,
-`barrido.py` y `usuario.py`. **No** monta `app.py` ni `models.py`, así que el motor
+`barrido.py`, `teoria.py` y `usuario.py`. **No** monta `app.py` ni `models.py`, así que el motor
 no puede depender del editor: si lo hiciera, el Worker no arrancaría.
 
 Se crean dos instancias del mismo archivo:

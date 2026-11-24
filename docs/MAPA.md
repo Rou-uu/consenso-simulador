@@ -13,7 +13,7 @@ flowchart TB
     BOOT["js/bootstrap.js<br/>baja Pyodide y corre app.py"]
     APP["python/app.py (+ models.py, geometry.py)<br/>estado, eventos y dibujo SVG"]
     WK["js/sweep-worker.js<br/>un Web Worker con su propio Pyodide"]
-    MOTOR["python/simulation/<br/>algoritmos · ronda · barrido · usuario<br/>= back/api.py"]
+    MOTOR["python/simulation/<br/>algoritmos · ronda · barrido · teoria · usuario<br/>= back/api.py (+ teoria, usuario)"]
 
     HTML --> BOOT --> APP
     APP -- "lee ALGORITMOS para el selector" --> MOTOR

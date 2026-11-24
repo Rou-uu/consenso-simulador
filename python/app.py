@@ -249,7 +249,7 @@ def user_source() -> str | None:
 
 #: Las claves de una entrada de ALGORITMOS que son funciones, en el orden en que
 #: se escriben en el `ALGORITMO` copiado.
-CLAVES_FUNCION = ("ronda", "batch", "actualizo")
+CLAVES_FUNCION = ("ronda", "batch", "actualizo", "esperanza")
 
 
 def codigo_de(clave: str) -> str:
@@ -630,20 +630,60 @@ def render_chart_axis(max_y: float, divisions: int, top: float, bottom: float) -
     by_id("chart-axis-labels").innerHTML = "".join(labels)
 
 
+def theory_for(points: list[dict[str, float]]) -> list[float] | None:
+    """La curva exacta del experimento en curso, si existe y corresponde a estos puntos."""
+    teorica = STATE.experiment.get("teorica") if STATE.experiment else None
+    return teorica if teorica and len(teorica) == len(points) else None
+
+
+def render_results() -> None:
+    """Leyenda de la gráfica y tabla de resultados del último sweep."""
+    experiment = STATE.experiment
+    puntos = experiment["puntos"] if experiment else []
+    set_hidden("results-table", not puntos)
+    if not puntos:
+        by_id("theory-note").innerHTML = ""
+        by_id("results-table-body").innerHTML = ""
+        return
+    teorica = theory_for(puntos)
+    leyenda = [
+        '<span class="legend-item"><span class="legend-swatch"></span>media simulada</span>',
+        '<span class="legend-item"><span class="legend-swatch band"></span>IC 95 %</span>',
+    ]
+    if teorica:
+        leyenda.append('<span class="legend-item"><span class="legend-swatch theory"></span>'
+                       'teórica: discrepancia esperada exacta</span>')
+    else:
+        leyenda.append(f'<span class="legend-item">Sin curva teórica: '
+                       f'{html.escape(experiment.get("motivo_teorica") or "no disponible")}.</span>')
+    by_id("theory-note").innerHTML = "".join(leyenda)
+    filas = []
+    for i, punto in enumerate(puntos):
+        teo = f"<td>{teorica[i]:.4f}</td>" if teorica else '<td class="sin-dato">—</td>'
+        filas.append(
+            f"<tr><td>{float(punto['p']):.3f}</td><td>{float(punto['mean']):.4f}</td>"
+            f"<td>{float(punto['ciLow']):.4f}</td><td>{float(punto['ciHigh']):.4f}</td>{teo}</tr>"
+        )
+    by_id("results-table-body").innerHTML = "".join(filas)
+    set_text("results-table-summary", f"Tabla de resultados ({len(puntos)} valores de p)")
+
+
 def render_chart(points: list[dict[str, float]]) -> None:
     global CHART_POINTS, CHART_MAX_Y
     CHART_POINTS = points
     set_hidden("chart-tooltip", True)
     left, right, top, bottom = CHART_LEFT, CHART_RIGHT, CHART_TOP, CHART_BOTTOM
 
+    teorica = theory_for(points)
     if points:
-        values = [float(p["ciHigh"]) for p in points] + [float(p["mean"]) for p in points]
+        values = [float(p["ciHigh"]) for p in points] + [float(p["mean"]) for p in points] + (teorica or [])
         max_y, divisions = nice_axis(max(values))
     else:
         max_y, divisions = 1.0, 4
     CHART_MAX_Y = max_y
     render_chart_axis(max_y, divisions, top, bottom)
 
+    by_id("chart-theory-line").setAttribute("d", "")
     if not points:
         by_id("chart-confidence-band").setAttribute("d", "")
         by_id("chart-mean-line").setAttribute("d", "")
@@ -664,6 +704,11 @@ def render_chart(points: list[dict[str, float]]) -> None:
     band_path = "M " + " L ".join(upper + lower) + " Z"
     by_id("chart-mean-line").setAttribute("d", mean_path)
     by_id("chart-confidence-band").setAttribute("d", band_path)
+    if teorica:
+        by_id("chart-theory-line").setAttribute("d", " ".join(
+            ("M" if i == 0 else "L") + f" {x_coord(float(pt['p'])):.2f},{y_coord(v):.2f}"
+            for i, (pt, v) in enumerate(zip(points, teorica))
+        ))
 
 
 def on_chart_pointer_move(event) -> None:
@@ -682,6 +727,9 @@ def on_chart_pointer_move(event) -> None:
         f'Media: {float(point["mean"]):.4f}<br>'
         f'IC 95%: [{float(point["ciLow"]):.4f}, {float(point["ciHigh"]):.4f}]'
     )
+    teorica = theory_for(CHART_POINTS)
+    if teorica:
+        tooltip.innerHTML += f'<br>Teórica: {teorica[CHART_POINTS.index(point)]:.4f}'
     chart_bounds = tooltip.parentElement.getBoundingClientRect()
     local_x = float(event.clientX) - float(chart_bounds.left)
     local_y = float(event.clientY) - float(chart_bounds.top)
@@ -700,6 +748,7 @@ CHART_SVG_STYLE = (
     ".chart-axis-labels .chart-axis-title{fill:#6e6690;font-size:12px}"
     ".chart-confidence-band{fill:#6e7cf2;fill-opacity:.18;stroke:none}"
     ".chart-mean-line{fill:none;stroke:#f4b45c;stroke-width:2.5}"
+    ".chart-theory-line{fill:none;stroke:#7fd6c2;stroke-width:2;stroke-dasharray:6 5}"
     "</style>"
     '<rect width="100%" height="100%" fill="#1f1b30"/>'
 )
@@ -714,11 +763,13 @@ def experiment_basename(experiment: dict[str, Any]) -> str:
 def experiment_csv(experiment: dict[str, Any]) -> str:
     """La curva, una fila por p. `repr` conserva todos los dígitos del float."""
     n = experiment["simulaciones_por_p"]
-    filas = ["p,media,ic_bajo,ic_alto,simulaciones"]
-    for punto in experiment["puntos"]:
+    teorica = theory_for(experiment["puntos"])
+    filas = ["p,media,ic_bajo,ic_alto,simulaciones,teorica"]
+    for i, punto in enumerate(experiment["puntos"]):
         filas.append(
             f"{float(punto['p'])!r},{float(punto['mean'])!r},"
-            f"{float(punto['ciLow'])!r},{float(punto['ciHigh'])!r},{n}"
+            f"{float(punto['ciLow'])!r},{float(punto['ciHigh'])!r},{n},"
+            + (repr(teorica[i]) if teorica else "")
         )
     return "\n".join(filas) + "\n"
 
@@ -730,6 +781,7 @@ def experiment_json(experiment: dict[str, Any]) -> str:
     cargar tal cual.
     """
     params = experiment["params"]
+    teorica = theory_for(experiment["puntos"])
     documento = {
         "fecha": experiment["fecha"],
         "red": params["graph"],
@@ -751,14 +803,16 @@ def experiment_json(experiment: dict[str, Any]) -> str:
         "resultado": {
             "completo": experiment["completo"],
             "simulaciones_por_p": experiment["simulaciones_por_p"],
+            "motivo_sin_teorica": None if teorica else experiment.get("motivo_teorica"),
             "puntos": [
                 {
                     "p": float(punto["p"]),
                     "media": float(punto["mean"]),
                     "ic_bajo": float(punto["ciLow"]),
                     "ic_alto": float(punto["ciHigh"]),
+                    "teorica": teorica[i] if teorica else None,
                 }
-                for punto in experiment["puntos"]
+                for i, punto in enumerate(experiment["puntos"])
             ],
         },
     }
@@ -1785,6 +1839,9 @@ def start_sweep(*_args) -> None:
         "puntos": [],
         "simulaciones_por_p": 0,
         "completo": False,
+        # La manda el Worker antes de la primera iteración (teoria.curva_exacta).
+        "teorica": None,
+        "motivo_teorica": "calculando…",
     }
     STATE.sweep_running = True
     set_sweep_inputs_disabled(True)
@@ -1810,11 +1867,19 @@ def start_sweep(*_args) -> None:
                     completo=bool(message.get("done")),
                 )
                 render_downloads()
+            render_results()
             completed = " — completo" if message.get("done") else ""
             by_id("sweep-status").innerHTML = (
                 f'<p>Iteración {int(message["iteration"])+1}/{int(message["totalIterations"])} — '
                 f'{int(message["simulationsPerP"])} sims/p{completed} · semilla {STATE.sweep_seed}</p>'
             )
+        elif kind == "teorica":
+            if STATE.experiment is not None:
+                valores = message.get("valores")
+                STATE.experiment["teorica"] = [float(v) for v in valores] if valores else None
+                STATE.experiment["motivo_teorica"] = str(message.get("motivo") or "")
+                render_chart(CHART_POINTS)
+                render_results()
         elif kind == "end":
             finish_sweep()
         elif kind == "error":

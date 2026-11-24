@@ -6,6 +6,7 @@ const SWEEP_FILES = [
   "python/simulation/algoritmos.py",
   "python/simulation/ronda.py",
   "python/simulation/barrido.py",
+  "python/simulation/teoria.py",
   "python/simulation/usuario.py",
 ];
 
@@ -124,8 +125,21 @@ import numpy as np
 from js import Object, postMessage
 from pyodide.ffi import to_js
 from simulation.barrido import iter_sweep
+from simulation.teoria import curva_exacta
 
 _params = json.loads(_sweep_params_json)
+# La curva exacta no usa azar: va antes de fijar la semilla y no la altera.
+# Un fallo aquí no debe tumbar el sweep, así que viaja como motivo.
+try:
+    _teorica, _motivo = curva_exacta(
+        _params["graph"], _params.get("algorithm", "fv"), _params.get("algorithmParams") or {},
+        _params.get("modo", "por_arista"), _params.get("rounds", 1),
+        np.linspace(0, 1, int(_params.get("numPPoints", 201))),
+    )
+except Exception as _error:
+    _teorica, _motivo = None, f"no se pudo calcular: {_error}"
+postMessage(to_js({"type": "teorica", "valores": _teorica, "motivo": _motivo},
+                  dict_converter=Object.fromEntries))
 # El motor usa el np.random global: fijarlo aquí, justo antes, hace repetible
 # toda la corrida. El Worker nace con cada sweep, así que nada más lo consume.
 if _params.get("semilla") is not None:

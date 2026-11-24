@@ -102,6 +102,13 @@ correr, incluso cuando el reparto deja menos de las pedidas. Es una copia de dos
 líneas del motor: `smoke_ui.py` comprueba que coincida con el evento `start` de
 `iter_sweep`. Si cambias una, cambia la otra.
 
+**Semilla.** `seed_field()` lee el campo: vacío es `None`, y algo que no sea un
+entero entre 0 y `SEED_MAX` (2³² − 1, lo que acepta `np.random.seed`) se rechaza
+en vez de sortear otra en silencio. `start_sweep` siempre manda una: la escrita o
+una sorteada con `random`, que queda en `STATE.sweep_seed` y se muestra en el
+estado del sweep. El Worker la fija con `np.random.seed` justo antes de
+`iter_sweep` (ver [MOTOR](MOTOR.md#el-sweep-iter_sweep)).
+
 La explicación de cada modo de paso de mensajes está en `MODOS_AYUDA`; un modo
 nuevo en el selector necesita su entrada ahí (`smoke_ui` lo vigila).
 

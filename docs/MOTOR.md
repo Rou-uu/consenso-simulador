@@ -90,6 +90,14 @@ todos los `p` y emite la curva con media e IC 95 %.
 - Si no lo tiene, corren una por una con `run_one_simulation_naive`: el mismo
   resultado en promedio, pero de 13 a 40 veces más lento.
 
+**Semilla.** El motor usa el `np.random` global y no recibe semilla: la fija el
+Worker (`np.random.seed(semilla)`) justo antes de llamar a `iter_sweep`, así que
+el motor no cambió. Como el Worker del sweep nace y muere con cada corrida, nada
+más consume ese azar: misma red, algoritmo, parámetros, modo y semilla dan la
+misma curva. `smoke_ui.py` lo comprueba. Si algún día el motor pasa a
+`np.random.default_rng()`, esa comprobación falla y la semilla tendrá que entrar
+como argumento.
+
 ## Agregar un algoritmo
 
 Se edita solo `algoritmos.py`: una función y una entrada en `ALGORITMOS`.

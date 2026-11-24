@@ -581,6 +581,55 @@ app.render_controls()
 comprobar(DOCUMENTO.getElementById("network-values").textContent == "Valores: 0, 2.5. Discrepancia inicial: 2.5.",
           "el resumen de la red muestra los valores y la discrepancia inicial")
 
+print("\nLa semilla hace repetible el sweep")
+import numpy as np  # noqa: E402
+
+campo_semilla = DOCUMENTO.getElementById("seed-input")
+for valor, esperado in [("", None), ("  42 ", 42), ("0", 0), (str(2**32 - 1), 2**32 - 1)]:
+    campo_semilla.value = valor
+    comprobar(app.seed_field() == esperado, f"semilla {valor!r} → {esperado}")
+for valor in ["-1", "4.5", "abc", str(2**32), "²"]:
+    campo_semilla.value = valor
+    try:
+        app.seed_field()
+        comprobar(False, f"semilla {valor!r} debía rechazarse")
+    except ValueError:
+        comprobar(True, f"semilla {valor!r} se rechaza")
+
+
+def mandar_sweep() -> dict | None:
+    app.STATE.sweep_running = False
+    FakeWorker.ultimo = None
+    app.start_sweep()
+    enviado = FakeWorker.ultimo.enviados[-1]["params"] if FakeWorker.ultimo else None
+    app.finish_sweep()
+    return enviado
+
+
+campo_semilla.value = "123"
+comprobar(mandar_sweep()["semilla"] == 123, "la semilla escrita viaja al Worker")
+campo_semilla.value = ""
+sorteada = mandar_sweep()["semilla"]
+comprobar(isinstance(sorteada, int) and 0 <= sorteada <= 2**32 - 1 and app.STATE.sweep_seed == sorteada,
+          "sin semilla se sortea una, viaja y queda en el estado para mostrarla")
+campo_semilla.value = "abc"
+comprobar(mandar_sweep() is None, "con una semilla inválida no sale ningún sweep")
+comprobar("semilla debe ser" in DOCUMENTO.getElementById("sweep-status").innerHTML, "y el estado dice por qué")
+campo_semilla.value = ""
+
+
+def curva_con(semilla: int, algoritmo: str) -> list:
+    # Lo mismo que hace el Worker: fijar np.random y recorrer iter_sweep.
+    np.random.seed(semilla)
+    eventos = list(iter_sweep(GRAFO_MINIMO, algorithm=algoritmo, num_p_points=5,
+                              total_simulations_per_p=40, iterations=2))
+    return eventos[-1]["points"]
+
+
+for algoritmo in ("fv", "amp"):
+    comprobar(curva_con(7, algoritmo) == curva_con(7, algoritmo), f"{algoritmo}: misma semilla, misma curva")
+    comprobar(curva_con(7, algoritmo) != curva_con(8, algoritmo), f"{algoritmo}: otra semilla, otra curva")
+
 print()
 if FALLAS:
     print(f"FALLA — {len(FALLAS)} comprobación(es):")

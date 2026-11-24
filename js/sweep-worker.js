@@ -120,11 +120,16 @@ async function correrBarrido(datos) {
   await pyodide.runPythonAsync(`
 import json
 
+import numpy as np
 from js import Object, postMessage
 from pyodide.ffi import to_js
 from simulation.barrido import iter_sweep
 
 _params = json.loads(_sweep_params_json)
+# El motor usa el np.random global: fijarlo aquí, justo antes, hace repetible
+# toda la corrida. El Worker nace con cada sweep, así que nada más lo consume.
+if _params.get("semilla") is not None:
+    np.random.seed(int(_params["semilla"]))
 for _message in iter_sweep(
     _params["graph"],
     algorithm=_params.get("algorithm", "fv"),

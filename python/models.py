@@ -112,6 +112,8 @@ class AppState:
     node_counter: int = 0
     tab_counter: int = 1
     sweep_running: bool = False
+    # La semilla con la que corrió (o corre) el último sweep: la escrita o la sorteada.
+    sweep_seed: int | None = None
     # El worker avisa con un mensaje `listo` cuando termino de cargar Pyodide y
     # NumPy. Hasta entonces una ronda pedida espera dentro del worker, y el boton
     # lo dice en vez de fingir que ya esta calculando.

@@ -144,6 +144,10 @@ ALGORITMO = {"nombre": "Promedio de lo recibido", "ronda": promedio}
                 <span class="field-title"><label for="rounds-input">Rondas por simulación</label><span class="info-tip"><button class="info-btn" type="button" aria-label="Qué es «Rondas por simulación»" aria-describedby="rounds-help">i</button><span id="rounds-help" class="info-bubble" role="tooltip">Rondas de paso de mensajes antes de medir la discrepancia final. Entre 1 y 1000.</span></span></span>
                 <input id="rounds-input" type="number" min="1" max="1000" value="1" aria-describedby="rounds-help" />
               </div>
+              <div class="sweep-field">
+                <span class="field-title"><label for="seed-input">Semilla</label><span class="info-tip"><button class="info-btn" type="button" aria-label="Qué es «Semilla»" aria-describedby="seed-help">i</button><span id="seed-help" class="info-bubble" role="tooltip">Fija el azar para repetir el experimento exacto: misma red, algoritmo, modo, parámetros y semilla dan la misma curva. Vacía, se sortea una y se muestra al correr. Entero entre 0 y 4 294 967 295.</span></span></span>
+                <input id="seed-input" type="text" inputmode="numeric" placeholder="al azar" autocomplete="off" spellcheck="false" />
+              </div>
               <p id="sweep-plan" class="sweep-plan" aria-live="polite"></p>
             </div>
           </section>

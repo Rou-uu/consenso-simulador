@@ -53,6 +53,9 @@ MODOS_AYUDA = {
                   "Con pesos iguales, como en el sweep, su mensaje llega a todos sus vecinos o a ninguno.",
 }
 
+#: La mayor semilla que acepta `np.random.seed`.
+SEED_MAX = 2**32 - 1
+
 #: (mínimo, máximo) de cada campo del sweep. Son los límites de `iter_sweep`, y los
 #: mismos que los min/max de index.html.
 SWEEP_LIMITS = {
@@ -1436,6 +1439,24 @@ def sweep_field(element_id: str) -> int:
         return low
 
 
+def miles(n: int) -> str:
+    return f"{n:,}".replace(",", " ")
+
+
+def seed_field() -> int | None:
+    """La semilla escrita, o ``None`` si el campo está vacío.
+
+    Eleva ``ValueError`` si no es un entero entre 0 y ``SEED_MAX``: sortear otra
+    en silencio haría creer que el experimento se puede repetir.
+    """
+    texto = str(by_id("seed-input").value).strip()
+    if not texto:
+        return None
+    if not (texto.isascii() and texto.isdigit()) or int(texto) > SEED_MAX:
+        raise ValueError(f"La semilla debe ser un entero entre 0 y {miles(SEED_MAX)}.")
+    return int(texto)
+
+
 def sweep_plan() -> dict[str, int]:
     """Lo que correrá el sweep con los campos actuales.
 
@@ -1458,9 +1479,6 @@ def render_sweep_plan(*_args) -> None:
     plan = sweep_plan()
     por_p = plan["por_pasada"] * plan["pasadas"]
 
-    def miles(n: int) -> str:
-        return f"{n:,}".replace(",", " ")
-
     rondas = "1 ronda" if plan["rondas"] == 1 else f"{plan['rondas']} rondas"
     texto = (
         f"{plan['puntos']} valores de p × {miles(por_p)} simulaciones = "
@@ -1469,11 +1487,16 @@ def render_sweep_plan(*_args) -> None:
     )
     if por_p != plan["pedidas"]:
         texto += f" Pediste {miles(plan['pedidas'])}: en pasadas iguales caben {miles(por_p)}."
+    try:
+        semilla = seed_field()
+        texto += " Semilla: al azar." if semilla is None else f" Semilla: {semilla}."
+    except ValueError as error:
+        texto += f" {error}"
     set_text("sweep-plan", texto)
 
 
 def set_sweep_inputs_disabled(disabled: bool) -> None:
-    for element_id in ("p-points-input", "simulations-input", "iterations-input", "rounds-input"):
+    for element_id in ("p-points-input", "simulations-input", "iterations-input", "rounds-input", "seed-input"):
         by_id(element_id).disabled = disabled
     set_hidden("sweep-run-btn", disabled)
     set_hidden("sweep-stop-btn", not disabled)
@@ -1494,6 +1517,14 @@ def start_sweep(*_args) -> None:
     global WORKER
     if not STATE.tab.nodes or STATE.sweep_running:
         return
+    try:
+        semilla = seed_field()
+    except ValueError as error:
+        by_id("sweep-status").innerHTML = f'<p class="sweep-error">{html.escape(str(error))}</p>'
+        return
+    # Siempre viaja una semilla: si no la escribieron se sortea aquí, para poder
+    # mostrarla y que cualquier corrida se pueda repetir.
+    STATE.sweep_seed = random.randrange(SEED_MAX + 1) if semilla is None else semilla
     params = {
         "graph": current_graph_json(),
         "algorithm": STATE.algorithm,
@@ -1506,6 +1537,7 @@ def start_sweep(*_args) -> None:
         "totalSimulationsPerP": sweep_field("simulations-input"),
         "iterations": sweep_field("iterations-input"),
         "rounds": sweep_field("rounds-input"),
+        "semilla": STATE.sweep_seed,
     }
     STATE.sweep_running = True
     set_sweep_inputs_disabled(True)
@@ -1526,7 +1558,7 @@ def start_sweep(*_args) -> None:
             completed = " — completo" if message.get("done") else ""
             by_id("sweep-status").innerHTML = (
                 f'<p>Iteración {int(message["iteration"])+1}/{int(message["totalIterations"])} — '
-                f'{int(message["simulationsPerP"])} sims/p{completed}</p>'
+                f'{int(message["simulationsPerP"])} sims/p{completed} · semilla {STATE.sweep_seed}</p>'
             )
         elif kind == "end":
             finish_sweep()

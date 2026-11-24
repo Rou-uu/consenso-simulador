@@ -528,6 +528,25 @@ comprobar(
 app.finish_sweep()
 
 
+print("\nLas dos pantallas: análisis al frente, la red detrás de un botón")
+clases = DOCUMENTO.getElementById("app").classList.clases
+app.STATE.active_view = "analysis"
+app.render_controls()
+comprobar("view-analysis" in clases and "view-editor" not in clases, "arranca en el análisis")
+app.change_view("editor")
+comprobar("view-editor" in clases and "view-analysis" not in clases, "«Editar red» muestra el editor")
+app.change_view("analysis")
+comprobar("view-analysis" in clases, "«Volver al análisis» regresa")
+app.STATE.tab.nodes = [Node("n1", 1.0)]
+app.STATE.selected_node_id = "n1"
+app.on_key_down(types.SimpleNamespace(key="Delete", code="Delete", preventDefault=lambda: None))
+comprobar(len(app.STATE.tab.nodes) == 1, "en el análisis, Supr no borra el nodo seleccionado (no se ve)")
+app.render_controls()
+comprobar(
+    DOCUMENTO.getElementById("network-summary").textContent.startswith(f"{app.STATE.tab.name}: 1 nodo ·"),
+    "el resumen de la red cuenta los nodos de la pestaña activa",
+)
+
 print()
 if FALLAS:
     print(f"FALLA — {len(FALLAS)} comprobación(es):")

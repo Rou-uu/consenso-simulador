@@ -18,10 +18,10 @@ mensajes actualiza su valor según el algoritmo. La medida es la
 
 Dos formas de correrlo:
 
-1. **«Simular»**: una ronda sobre tu grafo, con tus pesos.
-2. **«Análisis de Convergencia»** (sweep): ignora los pesos, pone la misma
-   probabilidad `p` en todas las aristas que existen, barre `p` de 0 a 1 y grafica
-   la discrepancia media con su IC 95 %.
+1. **El análisis de convergencia** (sweep), la pantalla con la que abre la app:
+   ignora los pesos, pone la misma probabilidad `p` en todas las aristas que
+   existen, barre `p` de 0 a 1 y grafica la discrepancia media con su IC 95 %.
+2. **«Simular»**, dentro de «Editar red»: una ronda sobre tu grafo, con tus pesos.
 
 La matemática es la de `back/api.py` del proyecto original. Ver [MOTOR.md](MOTOR.md).
 
@@ -46,11 +46,11 @@ PYTHONDONTWRITEBYTECODE=1 python3 scripts/smoke_ui.py       # la interfaz
 
 ## Primer recorrido
 
-1. Arrastra el círculo «Nodo» al lienzo dos veces.
+1. «Editar red» y arrastra el círculo «Nodo» al lienzo dos veces.
 2. Con **Shift** presionado, arrastra de un nodo al otro: crea una arista.
 3. Doble clic en un nodo para cambiar su valor; clic en la arista para su peso.
 4. «Simular»: los valores cambian. «Ver Antes» y «Resetear» vuelven atrás.
-5. «Análisis de Convergencia» → baja los parámetros (21 puntos, 200
+5. «← Volver al análisis» → baja los parámetros (21 puntos, 200
    simulaciones, 5 iteraciones) → «Ejecutar sweep».
 
 ## El proyecto de referencia

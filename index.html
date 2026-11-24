@@ -18,8 +18,7 @@
       <input id="file-input" type="file" accept=".json,application/json" hidden />
 
       <nav class="view-tabs-bar" aria-label="Vistas de la aplicación" role="tablist">
-        <button id="view-editor" class="view-tab active" role="tab" aria-selected="true" data-view="editor">Editor</button>
-        <button id="view-analysis" class="view-tab" role="tab" aria-selected="false" data-view="analysis">Análisis de Convergencia</button>
+        <button id="view-analysis" class="view-tab active" role="tab" aria-selected="true" data-view="analysis">Análisis de convergencia</button>
       </nav>
 
       <section class="tabs-bar" aria-label="Pestañas de grafos">
@@ -31,31 +30,45 @@
         </div>
       </section>
 
+      <!-- Una sola barra lateral para las dos pantallas. La clase view-analysis /
+           view-editor de #app (la pone app.py) esconde las secciones only-* que no
+           tocan; el bloque «Algoritmo» se ve en las dos. -->
       <div class="main-content">
-        <aside class="sidebar" aria-label="Herramientas del editor">
-          <h1>Nodos Disponibles</h1>
+        <aside class="sidebar" aria-label="Controles">
+          <button id="back-to-analysis-btn" class="quiet-btn back-btn only-editor" type="button">← Volver al análisis</button>
 
-          <div id="node-template" class="node-item" draggable="true" data-node-type="custom" title="Arrastra un nodo al canvas">
-            <div class="node-preview-circle"><span>Nodo</span></div>
-          </div>
-
-          <section class="graph-type-selector" aria-label="Tipo de grafo">
-            <label class="checkbox-label" for="directed-toggle">
-              <input id="directed-toggle" type="checkbox" checked />
-              <span>Grafo Dirigido</span>
-            </label>
-            <p id="directed-description" class="checkbox-info">→ Las aristas tienen dirección (con flechas)</p>
+          <section class="panel-card only-analysis" aria-labelledby="network-heading">
+            <h2 id="network-heading">Red</h2>
+            <p id="network-summary" class="network-summary"></p>
+            <button id="edit-network-btn" class="quiet-btn" type="button">Editar red</button>
           </section>
 
-          <div class="sidebar-actions" aria-label="Acciones de archivo">
-            <button id="show-json-btn" class="quiet-btn" type="button">Mostrar JSON</button>
-            <button id="import-btn" class="quiet-btn" type="button">Importar JSON</button>
-            <button id="export-btn" class="quiet-btn" type="button">Exportar JSON</button>
-            <button id="clear-btn" class="quiet-btn danger-quiet" type="button">Limpiar Grafo</button>
+          <div class="only-editor editor-tools">
+            <h1>Nodos Disponibles</h1>
+
+            <div id="node-template" class="node-item" draggable="true" data-node-type="custom" title="Arrastra un nodo al canvas">
+              <div class="node-preview-circle"><span>Nodo</span></div>
+            </div>
+
+            <section class="graph-type-selector" aria-label="Tipo de grafo">
+              <label class="checkbox-label" for="directed-toggle">
+                <input id="directed-toggle" type="checkbox" checked />
+                <span>Grafo Dirigido</span>
+              </label>
+              <p id="directed-description" class="checkbox-info">→ Las aristas tienen dirección (con flechas)</p>
+            </section>
+
+            <div class="sidebar-actions" aria-label="Acciones de archivo">
+              <button id="show-json-btn" class="quiet-btn" type="button">Mostrar JSON</button>
+              <button id="import-btn" class="quiet-btn" type="button">Importar JSON</button>
+              <button id="export-btn" class="quiet-btn" type="button">Exportar JSON</button>
+              <button id="clear-btn" class="quiet-btn danger-quiet" type="button">Limpiar Grafo</button>
+            </div>
+
           </div>
 
-          <section class="simulation-section" aria-labelledby="simulation-heading">
-            <h2 id="simulation-heading">Simulación</h2>
+          <section class="simulation-section" aria-labelledby="algorithm-heading">
+            <h2 id="algorithm-heading">Algoritmo</h2>
             <div class="algorithm-selector">
               <label class="field-label" for="algorithm-select">Algoritmo</label>
               <!-- Opciones y campos de parámetros los genera app.py desde
@@ -97,6 +110,10 @@ ALGORITMO = {"nombre": "Promedio de lo recibido", "ronda": promedio}
               </p>
               <pre id="user-code-error" class="user-code-error" hidden></pre>
             </div>
+          </section>
+
+          <section class="simulation-section only-editor" aria-labelledby="round-heading">
+            <h2 id="round-heading">Una ronda en el editor</h2>
             <button id="simulate-btn" class="simulate-btn" type="button" disabled>Simular</button>
             <div id="simulation-results" class="simulation-results" hidden>
               <button id="toggle-simulation-btn" class="secondary-btn" type="button">Ver Antes</button>
@@ -105,7 +122,27 @@ ALGORITMO = {"nombre": "Promedio de lo recibido", "ronda": promedio}
             </div>
           </section>
 
-          <section class="info" aria-label="Instrucciones">
+          <section class="simulation-section only-analysis" aria-labelledby="sweep-heading">
+            <h2 id="sweep-heading">Experimento</h2>
+            <div class="sweep-controls">
+              <label class="sweep-field" for="p-points-input">Puntos de p
+                <input id="p-points-input" type="number" min="2" max="1001" value="201" />
+              </label>
+              <label class="sweep-field" for="simulations-input">Simulaciones totales por p
+                <input id="simulations-input" type="number" min="1" max="50000" value="5000" />
+              </label>
+              <label class="sweep-field" for="iterations-input">Iteraciones (refinamiento)
+                <input id="iterations-input" type="number" min="1" max="1000" value="50" />
+              </label>
+              <label class="sweep-field" for="rounds-input">Rondas por simulación
+                <input id="rounds-input" type="number" min="1" max="1000" value="1" />
+              </label>
+              <button id="sweep-run-btn" class="sweep-run-btn" type="button" disabled>Ejecutar sweep</button>
+              <button id="sweep-stop-btn" class="sweep-stop-btn" type="button" hidden>Detener</button>
+            </div>
+          </section>
+
+          <section class="info only-editor" aria-label="Instrucciones">
             <p>Instrucciones:</p>
             <ul>
               <li>Arrastra nodos al canvas</li>
@@ -121,7 +158,40 @@ ALGORITMO = {"nombre": "Promedio de lo recibido", "ronda": promedio}
           </section>
         </aside>
 
-        <section id="canvas-container" class="canvas-container" aria-label="Canvas de grafo" tabindex="0">
+        <section class="analysis-main only-analysis" aria-labelledby="chart-heading">
+          <header class="analysis-header">
+            <h2 id="chart-heading">Discrepancia media vs p</h2>
+            <p class="analysis-subtitle">Discrepancia final (máx − mín) promediada sobre las simulaciones, con su intervalo de confianza del 95 %.</p>
+          </header>
+          <div id="sweep-status" class="sweep-status" aria-live="polite"><p>Ajusta los parámetros y ejecuta el sweep.</p></div>
+          <div class="sweep-chart" aria-label="Gráfica de discrepancia contra p">
+            <svg id="sweep-chart-svg" viewBox="0 0 800 440" role="img" aria-label="Sweep de discrepancia versus p">
+              <!-- La rejilla horizontal y las marcas del eje Y las regenera app.py
+                   (CHART_*): el número de divisiones depende de la escala. El eje X
+                   siempre es p en [0, 1], así que es fijo. -->
+              <g class="chart-grid">
+                <line x1="236" y1="24" x2="236" y2="392"></line><line x1="416" y1="24" x2="416" y2="392"></line>
+                <line x1="596" y1="24" x2="596" y2="392"></line>
+              </g>
+              <g id="chart-grid" class="chart-grid"></g>
+              <path id="chart-confidence-band" class="chart-confidence-band" d=""></path>
+              <path id="chart-mean-line" class="chart-mean-line" d=""></path>
+              <g id="chart-axis-labels" class="chart-axis-labels"></g>
+              <g class="chart-axis-labels">
+                <text x="56" y="412" text-anchor="middle">0</text><text x="236" y="412" text-anchor="middle">0.25</text>
+                <text x="416" y="412" text-anchor="middle">0.5</text><text x="596" y="412" text-anchor="middle">0.75</text>
+                <text x="776" y="412" text-anchor="middle">1</text>
+                <text class="chart-axis-title" x="416" y="436" text-anchor="middle">p (probabilidad de entrega)</text>
+                <text class="chart-axis-title" x="14" y="208" text-anchor="middle" transform="rotate(-90 14 208)">discrepancia</text>
+              </g>
+              <line class="chart-axis" x1="56" y1="392" x2="776" y2="392"></line>
+              <line class="chart-axis" x1="56" y1="24" x2="56" y2="392"></line>
+            </svg>
+            <div id="chart-tooltip" class="chart-tooltip" hidden></div>
+          </div>
+        </section>
+
+        <section id="canvas-container" class="canvas-container only-editor" aria-label="Canvas de grafo" tabindex="0">
           <svg id="graph-canvas" class="graph-canvas" xmlns="http://www.w3.org/2000/svg" aria-label="Grafo editable">
             <defs>
               <pattern id="grid-dots" width="12" height="12" patternUnits="userSpaceOnUse">
@@ -154,48 +224,6 @@ ALGORITMO = {"nombre": "Promedio de lo recibido", "ronda": promedio}
           </div>
         </section>
 
-        <aside id="sweep-panel" class="sweep-panel" aria-labelledby="sweep-heading" hidden>
-          <header class="sweep-panel-header"><h2 id="sweep-heading">Sweep de discrepancia vs p</h2></header>
-          <div class="sweep-controls">
-            <label class="sweep-field" for="p-points-input">Puntos de p
-              <input id="p-points-input" type="number" min="2" max="1001" value="201" />
-            </label>
-            <label class="sweep-field" for="simulations-input">Simulaciones totales por p
-              <input id="simulations-input" type="number" min="1" max="50000" value="5000" />
-            </label>
-            <label class="sweep-field" for="iterations-input">Iteraciones (refinamiento)
-              <input id="iterations-input" type="number" min="1" max="1000" value="50" />
-            </label>
-            <label class="sweep-field" for="rounds-input">Rondas por simulación
-              <input id="rounds-input" type="number" min="1" max="1000" value="1" />
-            </label>
-            <button id="sweep-run-btn" class="sweep-run-btn" type="button" disabled>Ejecutar sweep</button>
-            <button id="sweep-stop-btn" class="sweep-stop-btn" type="button" hidden>Detener</button>
-          </div>
-          <div id="sweep-status" class="sweep-status" aria-live="polite"><p>Ajusta los parámetros y ejecuta el sweep.</p></div>
-          <div class="sweep-chart" aria-label="Gráfica de discrepancia contra p">
-            <svg id="sweep-chart-svg" viewBox="0 0 400 320" role="img" aria-label="Sweep de discrepancia versus p">
-              <!-- Rejilla y etiquetas las regenera app.py: el número de
-                   divisiones depende de la escala de los datos. -->
-              <g id="chart-grid" class="chart-grid">
-                <line x1="44" y1="25" x2="382" y2="25"></line><line x1="44" y1="92" x2="382" y2="92"></line>
-                <line x1="44" y1="159" x2="382" y2="159"></line><line x1="44" y1="226" x2="382" y2="226"></line>
-                <line x1="44" y1="293" x2="382" y2="293"></line>
-              </g>
-              <path id="chart-confidence-band" class="chart-confidence-band" d=""></path>
-              <path id="chart-mean-line" class="chart-mean-line" d=""></path>
-              <g id="chart-axis-labels" class="chart-axis-labels">
-                <text x="38" y="297" text-anchor="end">0</text><text x="38" y="230" text-anchor="end">0.25</text>
-                <text x="38" y="163" text-anchor="end">0.5</text><text x="38" y="96" text-anchor="end">0.75</text>
-                <text x="38" y="29" text-anchor="end">1</text>
-                <text x="44" y="311" text-anchor="middle">0</text><text x="213" y="311" text-anchor="middle">0.5</text><text x="382" y="311" text-anchor="middle">1</text>
-              </g>
-              <line class="chart-axis" x1="44" y1="293" x2="382" y2="293"></line>
-              <line class="chart-axis" x1="44" y1="25" x2="44" y2="293"></line>
-            </svg>
-            <div id="chart-tooltip" class="chart-tooltip" hidden></div>
-          </div>
-        </aside>
       </div>
 
       <section id="json-panel" class="json-panel" aria-labelledby="json-heading" hidden>

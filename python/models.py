@@ -90,7 +90,7 @@ class SimulationState:
 class AppState:
     tabs: list[GraphTab] = field(default_factory=lambda: [GraphTab("tab_0", "Grafo 1")])
     active_tab_id: str = "tab_0"
-    active_view: str = "editor"
+    active_view: str = "analysis"
     algorithm: str = "fv"
     # Valores de los parámetros por algoritmo: {"amp": {"agreed": 0.5}, ...}.
     # Se llena bajo demanda desde los defaults de ALGORITMOS, de modo que cambiar

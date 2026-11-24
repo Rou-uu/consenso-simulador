@@ -12,6 +12,23 @@ parchea. No hay framework ni diffing.
 | `render_controls()` | botones, selector, campos, caja de código | cambios de estado sin tocar el grafo |
 | `render_all()` | pestañas + controles + lienzo + panel JSON | después de cualquier cambio estructural |
 
+## Las dos pantallas
+
+La app abre en el **análisis** (la gráfica); el editor del grafo es la pantalla
+**Red**, a la que se entra con «Editar red» y se sale con «← Volver al análisis».
+`STATE.active_view` vale `"analysis"` o `"editor"`, y `render_controls()` pone la
+clase `view-analysis` / `view-editor` en `#app`.
+
+Hay **una sola** barra lateral. Lo que es de una pantalla lleva la clase
+`only-analysis` u `only-editor` y el CSS lo esconde en la otra; el bloque
+«Algoritmo» no lleva ninguna y se ve en las dos, así que la ronda del editor y el
+sweep usan siempre la misma configuración. Mostrar u ocultar algo es cuestión de
+clases en `index.html`, no de Python.
+
+Mientras el lienzo está oculto mide 0 × 0, así que `change_view("editor")` llama a
+`fit_view()` al entrar. Fuera del editor, `on_key_down` no toca el grafo (Supr no
+borra un nodo que no se ve).
+
 ## `retain()`: el detalle que rompe todo en silencio
 
 Todo callback que se entrega a JavaScript pasa por `retain()` (o por `listen()`,
@@ -71,7 +88,10 @@ motor, no de cada algoritmo). `on_message_mode_change` guarda el valor en
 
 ## La gráfica del sweep
 
-`render_chart(points)` dibuja la media y la banda del IC en `#sweep-chart-svg`.
+`render_chart(points)` dibuja la media y la banda del IC en `#sweep-chart-svg`
+(viewBox de 800 de ancho; el área de trazado son las constantes `CHART_*`). El eje X
+es siempre `p` en [0, 1], así que sus marcas y su rejilla están fijas en
+`index.html` con esos mismos números; si cambian las constantes, cambian ahí también.
 El eje Y usa números redondos (`nice_axis`), y el tooltip
 (`on_chart_pointer_move`) muestra el punto más cercano a `p`.
 

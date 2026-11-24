@@ -14,7 +14,7 @@ archivos tal cual y el navegador hace todo lo demás.
    - escribe los `.py` en `/python/` del sistema de archivos de Pyodide;
    - ejecuta `runpy.run_path("/python/app.py", run_name="__main__")`.
 3. `app.py` → `main()`: `bind_events()` (todos los `listen(...)`),
-   `start_engine_worker()`, `render_all()`, `fit_view()`.
+   `start_engine_worker()`, `render_all()`, `render_chart([])` (dibuja el eje Y vacío).
 4. El overlay se oculta. Si algo falla, queda en `data-state="error"` con el
    mensaje en `#loader-detail`.
 

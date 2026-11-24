@@ -409,6 +409,11 @@ CHART_DIVISIONS = (4, 5, 6)
 #: Pasos "redondos" admitidos, como mantisa. Se escalan por potencias de diez.
 CHART_STEPS = (1.0, 2.0, 2.5, 5.0)
 
+#: Área de trazado dentro del viewBox de #sweep-chart-svg (800 de ancho). El eje X,
+#: sus marcas y la rejilla vertical están fijos en index.html con estos mismos números.
+CHART_WIDTH = 800.0
+CHART_LEFT, CHART_RIGHT, CHART_TOP, CHART_BOTTOM = 56.0, 776.0, 24.0, 392.0
+
 
 def nice_axis(value: float) -> tuple[float, int]:
     """Devuelve ``(tope, divisiones)`` para un eje con marcas legibles.
@@ -468,17 +473,10 @@ def render_chart_axis(max_y: float, divisions: int, top: float, bottom: float) -
     for index in range(divisions + 1):
         fraction = index / divisions
         y = bottom - fraction * (bottom - top)
-        grid.append(f'<line x1="44" y1="{y:.1f}" x2="382" y2="{y:.1f}"></line>')
+        grid.append(f'<line x1="{CHART_LEFT}" y1="{y:.1f}" x2="{CHART_RIGHT}" y2="{y:.1f}"></line>')
         labels.append(
-            f'<text x="38" y="{y+4:.1f}" text-anchor="end">{axis_label(max_y * fraction)}</text>'
+            f'<text x="{CHART_LEFT - 8}" y="{y+4:.1f}" text-anchor="end">{axis_label(max_y * fraction)}</text>'
         )
-    labels.extend(
-        [
-            '<text x="44" y="311" text-anchor="middle">0</text>',
-            '<text x="213" y="311" text-anchor="middle">0.5</text>',
-            '<text x="382" y="311" text-anchor="middle">1</text>',
-        ]
-    )
     by_id("chart-grid").innerHTML = "".join(grid)
     by_id("chart-axis-labels").innerHTML = "".join(labels)
 
@@ -487,7 +485,7 @@ def render_chart(points: list[dict[str, float]]) -> None:
     global CHART_POINTS, CHART_MAX_Y
     CHART_POINTS = points
     set_hidden("chart-tooltip", True)
-    left, right, top, bottom = 44.0, 382.0, 25.0, 293.0
+    left, right, top, bottom = CHART_LEFT, CHART_RIGHT, CHART_TOP, CHART_BOTTOM
 
     if points:
         values = [float(p["ciHigh"]) for p in points] + [float(p["mean"]) for p in points]
@@ -526,8 +524,8 @@ def on_chart_pointer_move(event) -> None:
     bounds = svg.getBoundingClientRect()
     if float(bounds.width) <= 0 or float(bounds.height) <= 0:
         return
-    svg_x = (float(event.clientX) - float(bounds.left)) * 400.0 / float(bounds.width)
-    p_value = max(0.0, min(1.0, (svg_x - 44.0) / (382.0 - 44.0)))
+    svg_x = (float(event.clientX) - float(bounds.left)) * CHART_WIDTH / float(bounds.width)
+    p_value = max(0.0, min(1.0, (svg_x - CHART_LEFT) / (CHART_RIGHT - CHART_LEFT)))
     point = min(CHART_POINTS, key=lambda item: abs(float(item["p"]) - p_value))
     tooltip = by_id("chart-tooltip")
     tooltip.innerHTML = (
@@ -585,11 +583,18 @@ def render_controls() -> None:
         )
     set_hidden("shift-indicator", not STATE.shift_pressed)
     by_id("canvas-container").classList.toggle("shift-mode", STATE.shift_pressed)
-    by_id("view-editor").classList.toggle("active", STATE.active_view == "editor")
-    by_id("view-analysis").classList.toggle("active", STATE.active_view == "analysis")
-    by_id("view-editor").setAttribute("aria-selected", str(STATE.active_view == "editor").lower())
-    by_id("view-analysis").setAttribute("aria-selected", str(STATE.active_view == "analysis").lower())
-    set_hidden("sweep-panel", STATE.active_view != "analysis")
+    analysis = STATE.active_view == "analysis"
+    # Las secciones .only-analysis / .only-editor se esconden por CSS según esta clase.
+    by_id("app").classList.toggle("view-analysis", analysis)
+    by_id("app").classList.toggle("view-editor", not analysis)
+    by_id("view-analysis").classList.toggle("active", analysis)
+    by_id("view-analysis").setAttribute("aria-selected", str(analysis).lower())
+    set_text(
+        "network-summary",
+        f"{tab.name}: {len(tab.nodes)} nodo{'' if len(tab.nodes) == 1 else 's'} · "
+        f"{len(tab.edges)} arista{'' if len(tab.edges) == 1 else 's'} · "
+        + ("dirigida" if tab.directed else "no dirigida"),
+    )
 
 
 def render_all() -> None:
@@ -927,7 +932,8 @@ def fit_view(*_args) -> None:
 
 def on_key_down(event) -> None:
     tag = str(document.activeElement.tagName).lower() if document.activeElement else ""
-    editing = tag in {"input", "select", "textarea"}
+    # Fuera del editor el teclado no toca el grafo: Supr borraría un nodo que no se ve.
+    editing = tag in {"input", "select", "textarea"} or STATE.active_view != "editor"
     if event.key == "Shift" and not STATE.shift_pressed:
         STATE.shift_pressed = True
         render_controls()
@@ -1386,6 +1392,9 @@ def reset_simulation(*_args) -> None:
 def change_view(view: str) -> None:
     STATE.active_view = view
     render_controls()
+    if view == "editor":
+        # Mientras el lienzo está oculto mide 0 × 0: se encuadra al volver a verse.
+        fit_view()
 
 
 def positive_int(element_id: str, minimum: int) -> int:
@@ -1515,8 +1524,9 @@ def bind_events() -> None:
     listen(by_id("simulate-btn"), "click", simulate)
     listen(by_id("toggle-simulation-btn"), "click", toggle_simulation)
     listen(by_id("reset-simulation-btn"), "click", reset_simulation)
-    listen(by_id("view-editor"), "click", lambda _event: change_view("editor"))
     listen(by_id("view-analysis"), "click", lambda _event: change_view("analysis"))
+    listen(by_id("edit-network-btn"), "click", lambda _event: change_view("editor"))
+    listen(by_id("back-to-analysis-btn"), "click", lambda _event: change_view("analysis"))
     listen(by_id("zoom-in-btn"), "click", lambda _event: zoom_by(1.2))
     listen(by_id("zoom-out-btn"), "click", lambda _event: zoom_by(1 / 1.2))
     listen(by_id("fit-view-btn"), "click", fit_view)
@@ -1533,7 +1543,7 @@ def main() -> None:
     bind_events()
     start_engine_worker()
     render_all()
-    fit_view()
+    render_chart([])
     window.graphSimulatorReady = True
 
 

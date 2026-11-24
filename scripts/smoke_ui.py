@@ -172,6 +172,7 @@ def instalar_dobles() -> FakeDocument:
         console=types.SimpleNamespace(error=lambda *_a: None),
         performance=types.SimpleNamespace(now=lambda: 0.0),
         setTimeout=lambda *_a: None,
+        localStorage=types.SimpleNamespace(setItem=lambda *_a: None),
     )
     js.Blob = js.URL = types.SimpleNamespace()
     # `to_js` es la identidad aquí, pero app.py sí evalúa `Object.fromEntries`.
@@ -1047,6 +1048,22 @@ comprobar(app.STATE.sweep_running and "sweep-error" in DOCUMENTO.getElementById(
 creados[1]._entregar({"type": "end"})
 comprobar(not app.STATE.sweep_running and not app.WORKERS, "el sweep termina cuando acaba el último Worker")
 app.STATE.sweep_algorithms = ["fv"]
+
+# --- Temas ---------------------------------------------------------------
+raiz, boton_tema = DOCUMENTO.getElementById("root"), DOCUMENTO.getElementById("theme-btn")
+app.STATE.theme = "cafe"
+app.apply_theme()
+comprobar(raiz.getAttribute("data-theme") == "cafe" and boton_tema.textContent == "Usar tema claro",
+          "tema: el predefinido es café y el botón ofrece el claro")
+teorica_cafe, svg_cafe, nodo_cafe = app.theory_color("fv"), app.chart_svg_style(), app.value_color(0, app.STATE.theme)
+app.toggle_theme()
+comprobar(app.STATE.theme == "claro" and raiz.getAttribute("data-theme") == "claro"
+          and boton_tema.textContent == "Usar tema café", "tema: el botón cambia al claro y ofrece volver")
+comprobar(teorica_cafe != app.theory_color("fv") and svg_cafe != app.chart_svg_style()
+          and nodo_cafe != app.value_color(0, app.STATE.theme) and 'fill="#ffffff"' in app.chart_svg_style(),
+          "tema: nodos, teórica y SVG descargado siguen al tema")
+app.toggle_theme()
+comprobar(app.STATE.theme == "cafe", "tema: un segundo clic vuelve al café")
 
 print()
 if FALLAS:

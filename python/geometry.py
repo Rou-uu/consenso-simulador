@@ -9,15 +9,20 @@ from models import Edge, Node
 
 
 NODE_RADIUS = 30.0
-V0 = (124, 157, 255)
-V1 = (242, 162, 74)
+#: Por tema: el color del valor 0, el del valor 1 y el del texto sobre un nodo claro.
+#: Son los --v0, --v1 y el fondo de app.css.
+PALETAS = {
+    "cafe": ((124, 157, 255), (242, 162, 74), "#15120F"),
+    "claro": ((47, 91, 216), (232, 135, 30), "#14213D"),
+}
 
 
 def clamp(value: float, low: float, high: float) -> float:
     return max(low, min(high, value))
 
 
-def value_color(value: object) -> tuple[str, str]:
+def value_color(value: object, tema: str = "cafe") -> tuple[str, str]:
+    v0, v1, oscuro = PALETAS[tema]
     try:
         amount = float(value)
         if math.isnan(amount):
@@ -25,9 +30,9 @@ def value_color(value: object) -> tuple[str, str]:
     except (TypeError, ValueError):
         amount = 0.0
     amount = clamp(amount, 0.0, 1.0)
-    rgb = tuple(round(a + (b - a) * amount) for a, b in zip(V0, V1))
+    rgb = tuple(round(a + (b - a) * amount) for a, b in zip(v0, v1))
     luminance = (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255
-    text = "#15120F" if luminance > 0.5 else "#FFFFFF"
+    text = oscuro if luminance > 0.5 else "#FFFFFF"
     return f"rgb({rgb[0]}, {rgb[1]}, {rgb[2]})", text
 
 

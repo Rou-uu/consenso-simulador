@@ -55,6 +55,7 @@ flowchart TB
 | probar un algoritmo sin tocar el repo | nada: «Algoritmo propio…» en el selector | la caja muestra el error con su línea |
 | la matemática de una ronda o del sweep | `ronda.py` / `barrido.py`, marcando `# Cambio respecto a api.py` y anotándolo en [MOTOR](MOTOR.md) | `equivalencia.py` antes y después; si falla, es un hallazgo, no se regraba |
 | cómo se dibuja algo | `render_canvas`, `render_minimap`, `render_chart` en `app.py`, o `geometry.py` | `smoke_ui.py` y el navegador |
+| un color o un tema | las variables de `:root` en `css/app.css`, y sus tres repeticiones en Python ([03 — Temas](03-interfaz.md#temas)) | `smoke_ui.py` y el botón de tema en el navegador |
 | un control de la interfaz | el `id` en `index.html` + el manejador y su `listen(...)` en `bind_events()` | clic real en el navegador |
 | un archivo `.py` nuevo | el archivo + `PYTHON_FILES` (`bootstrap.js`) y/o `SWEEP_FILES` (`sweep-worker.js`) | recargar: si falta, `ModuleNotFoundError` |
 | la versión de Pyodide | los 4 sitios de `314.0.2` en los dos `.js` | `grep -rn "314.0.2" js/` da 4 líneas, y revalidar todo |

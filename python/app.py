@@ -470,15 +470,16 @@ def render_tabs() -> None:
 
 
 def edge_style(edge: Edge) -> tuple[str, float, str]:
+    # Variables de app.css y no literales: así las aristas siguen al tema.
     if edge.highlight == "updated":
-        return "#F2A24A", 4, "edge-animated"
+        return "var(--v1)", 4, "edge-animated"
     if edge.highlight == "delivered":
-        return "#B5A898", 4, "edge-animated"
+        return "var(--muted)", 4, "edge-animated"
     if edge.highlight == "quiet":
-        return "#352C25", 1, ""
+        return "var(--line)", 1, ""
     if edge.id == STATE.selected_edge_id:
-        return "#7C9DFF", 4, ""
-    return "#7D7063", 3, ""
+        return "var(--v0)", 4, ""
+    return "var(--faint)", 3, ""
 
 
 def render_canvas() -> None:
@@ -525,12 +526,12 @@ def render_canvas() -> None:
     lider = tab.nodes[-1].id if algoritmo_activo().get("lider") and tab.nodes else None
     node_parts: list[str] = []
     for node in tab.nodes:
-        fill, text_color = value_color(node.value)
+        fill, text_color = value_color(node.value, STATE.theme)
         selected = " selected" if node.id == STATE.selected_node_id else ""
         figura = (
-            f'<rect class="node-circle" x="3" y="3" width="54" height="54" rx="6" fill="{fill}" stroke="#15120F" stroke-width="3"></rect>'
+            f'<rect class="node-circle" x="3" y="3" width="54" height="54" rx="6" fill="{fill}" stroke="var(--page)" stroke-width="3"></rect>'
             if node.id == lider else
-            f'<circle class="node-circle" cx="30" cy="30" r="30" fill="{fill}" stroke="#15120F" stroke-width="3"></circle>'
+            f'<circle class="node-circle" cx="30" cy="30" r="30" fill="{fill}" stroke="var(--page)" stroke-width="3"></circle>'
         )
         node_parts.append(
             f'<g class="graph-node{selected}" data-node-id="{html.escape(node.id)}" '
@@ -577,7 +578,7 @@ def render_minimap() -> None:
     node_svg = []
     for node in nodes:
         x, y = point(node)
-        fill, _ = value_color(node.value)
+        fill, _ = value_color(node.value, STATE.theme)
         node_svg.append(f'<circle cx="{x:.2f}" cy="{y:.2f}" r="{max(3, 9*scale):.2f}" fill="{fill}"></circle>')
     by_id("minimap-edges").innerHTML = "".join(edge_svg)
     by_id("minimap-nodes").innerHTML = "".join(node_svg)
@@ -697,10 +698,12 @@ def curve_color(clave: str) -> str:
 
 
 def theory_color(clave: str) -> str:
-    """El color del algoritmo aclarado: la teórica va punteada encima de su media
-    simulada, y con el mismo color no se distinguiría."""
-    color = curve_color(clave)
-    return "#" + "".join(f"{(int(color[i:i + 2], 16) + 2 * 255) // 3:02x}" for i in (1, 3, 5))
+    """El color del algoritmo alejado del fondo: la teórica va punteada encima de su
+    media simulada, y con el mismo color no se distinguiría. En el tema café se
+    aclara; en el claro se oscurece, porque aclarada se perdería contra el papel."""
+    canales = [int(curve_color(clave)[i:i + 2], 16) for i in (1, 3, 5)]
+    claro = STATE.theme == "claro"
+    return "#" + "".join(f"{c * 3 // 5 if claro else (c + 2 * 255) // 3:02x}" for c in canales)
 
 
 def curve_visible(curva: str) -> bool:
@@ -882,19 +885,49 @@ def on_chart_pointer_move(event) -> None:
     tooltip.style.top = f"{max(4.0, local_y - alto - 12.0):.1f}px"
 
 
-#: El estilo de la gráfica con colores literales: el SVG descargado no ve app.css.
-CHART_SVG_STYLE = (
-    "<style>"
-    ".chart-grid line{stroke:#352c25}"
-    ".chart-axis{stroke:#f1ebe3;stroke-width:1}"
-    ".chart-axis-labels text{fill:#b5a898;font:13px 'STIX Two Text',Georgia,'Times New Roman',serif}"
-    ".chart-axis-labels .chart-axis-title{fill:#f1ebe3;font-size:14px}"
-    ".chart-confidence-band{fill:#7c9dff;fill-opacity:.18;stroke:none}"
-    ".chart-mean-line{fill:none;stroke:#f2a24a;stroke-width:2.5}"
-    ".chart-theory-line{fill:none;stroke:#b5a898;stroke-width:1.5;stroke-dasharray:6 5}"
-    "</style>"
-    '<rect width="100%" height="100%" fill="#15120f"/>'
-)
+#: Los temas, el predefinido primero. Los colores son los de :root en app.css,
+#: repetidos aquí porque el SVG descargado no ve app.css.
+TEMAS = {
+    "cafe": {"nombre": "café", "fondo": "#15120f", "rejilla": "#352c25", "tinta": "#f1ebe3", "texto": "#b5a898"},
+    "claro": {"nombre": "claro", "fondo": "#ffffff", "rejilla": "#d5dae3", "tinta": "#14213d", "texto": "#5b6577"},
+}
+
+
+def chart_svg_style() -> str:
+    """El estilo de la gráfica descargada, en el tema a la vista. El color de cada
+    curva ya va en su `style`."""
+    t = TEMAS[STATE.theme]
+    return (
+        "<style>"
+        f".chart-grid line{{stroke:{t['rejilla']}}}"
+        f".chart-axis{{stroke:{t['tinta']};stroke-width:1}}"
+        f".chart-axis-labels text{{fill:{t['texto']};font:13px 'STIX Two Text',Georgia,'Times New Roman',serif}}"
+        f".chart-axis-labels .chart-axis-title{{fill:{t['tinta']};font-size:14px}}"
+        ".chart-confidence-band{fill-opacity:.18;stroke:none}"
+        ".chart-mean-line{fill:none;stroke-width:2.5}"
+        ".chart-theory-line{fill:none;stroke-width:1.5;stroke-dasharray:6 5}"
+        "</style>"
+        f'<rect width="100%" height="100%" fill="{t["fondo"]}"/>'
+    )
+
+
+def apply_theme() -> None:
+    by_id("root").setAttribute("data-theme", STATE.theme)
+    otro = next(t for t in TEMAS if t != STATE.theme)
+    set_text("theme-btn", f"Usar tema {TEMAS[otro]['nombre']}")
+
+
+def toggle_theme(*_args) -> None:
+    STATE.theme = next(t for t in TEMAS if t != STATE.theme)
+    try:
+        window.localStorage.setItem("tema", STATE.theme)
+    except Exception:  # sin almacenamiento (modo privado): el tema dura la sesión
+        pass
+    apply_theme()
+    # Nodos, minimapa y teóricas llevan colores calculados: se redibujan.
+    render_all()
+    render_chart()
+    render_results()
 
 
 def experiment_basename(experiment: dict[str, Any], algoritmos: str = "") -> str:
@@ -970,7 +1003,7 @@ def chart_svg(markup: str) -> str:
         # Sin tamaño propio, otros programas (Inkscape, LaTeX) lo abren diminuto.
         markup = markup.replace("<svg", f'<svg width="{CHART_WIDTH:g}" height="440"', 1)
     apertura, resto = markup.split(">", 1)
-    return f'<?xml version="1.0" encoding="UTF-8"?>\n{apertura}>{CHART_SVG_STYLE}{resto}\n'
+    return f'<?xml version="1.0" encoding="UTF-8"?>\n{apertura}>{chart_svg_style()}{resto}\n'
 
 
 def render_downloads() -> None:
@@ -2253,6 +2286,7 @@ def open_user_code(*_args) -> None:
 def bind_events() -> None:
     canvas = by_id("graph-canvas")
     listen(by_id("graph-tabs"), "click", on_tabs_click)
+    listen(by_id("theme-btn"), "click", toggle_theme)
     listen(by_id("node-template"), "dragstart", on_drag_start)
     listen(by_id("node-template"), "click", add_node_at_canvas_center)
     listen(canvas, "dragover", on_drag_over)
@@ -2317,6 +2351,10 @@ def main() -> None:
     global PLANTILLA_USUARIO, COPY_RESET
     PLANTILLA_USUARIO = str(by_id("user-code").value)
     COPY_RESET = retain(lambda: set_text("copy-code-btn", "Copiar"))
+    # bootstrap.js ya puso el tema guardado en <html>; aquí solo se valida.
+    guardado = by_id("root").getAttribute("data-theme")
+    STATE.theme = guardado if guardado in TEMAS else next(iter(TEMAS))
+    apply_theme()
     bind_events()
     start_engine_worker()
     render_all()

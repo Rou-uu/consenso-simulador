@@ -10,6 +10,13 @@ const PYTHON_FILES = [
   "python/simulation/usuario.py",
 ];
 
+// Arranque: el tema guardado se pone antes de bajar Pyodide, para que la carga no
+// salga en el otro tema. Cuáles existen y el botón que lo cambia viven en app.py.
+try {
+  const tema = localStorage.getItem("tema");
+  if (tema) document.documentElement.dataset.theme = tema;
+} catch { /* sin almacenamiento: queda el predefinido */ }
+
 const loader = document.getElementById("python-loader");
 const detail = document.getElementById("loader-detail");
 

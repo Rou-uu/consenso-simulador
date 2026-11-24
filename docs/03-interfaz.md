@@ -42,6 +42,25 @@ Los listeners van sobre contenedores que no se regeneran (`#graph-tabs`,
 `#graph-canvas`, `#algorithm-params`) y delegan con `event.target`. Un listener
 puesto sobre contenido regenerado se pierde en el siguiente render.
 
+## Temas
+
+Hay dos: «café» (el predefinido) y «claro». El botón `#theme-btn` de la cabecera
+los alterna (`toggle_theme`): cambia `STATE.theme`, pone `data-theme` en `<html>`
+(`apply_theme`), lo guarda en `localStorage["tema"]` y redibuja.
+
+- **`css/app.css`** tiene las dos paletas: `:root` (café) y
+  `:root[data-theme="claro"]`. El resto de la hoja solo usa esas variables.
+- **Las aristas y el borde de los nodos** llevan `var(--…)` en sus atributos
+  (`edge_style`), así que siguen al tema sin redibujar.
+- **Lo que se calcula en Python** sí repite literales: el relleno de los nodos
+  (`PALETAS` en `geometry.py`, porque interpola entre el valor 0 y el 1), la
+  teórica (`theory_color`) y el SVG descargado (`TEMAS` en `app.py`, porque fuera
+  de la página no hay `app.css`). Cambiar un color de la paleta obliga a
+  revisar esos tres sitios.
+- **`js/bootstrap.js`** solo pone el tema guardado antes de bajar Pyodide, para
+  que la pantalla de carga no salga en el otro tema; `main()` lo valida contra
+  `TEMAS`.
+
 ## El lienzo
 
 Cuatro capas dentro de `#graph-canvas`, todas con la misma transformación de
@@ -147,7 +166,7 @@ algoritmo.
 
 Cada algoritmo tiene su color (`curve_color`, por su lugar en el registro: no
 cambia según cuáles estén palomeados); su teórica va punteada y en el mismo
-color aclarado (`theory_color`). El color va en `style`, no como atributo, para
+color alejado del fondo (`theory_color`: aclarado en el tema café, oscurecido en el claro). El color va en `style`, no como atributo, para
 que el CSS de la clase no lo pise. `#chart-toggles` es la leyenda y a la vez las
 casillas de «qué se muestra»: una por curva más la del IC. Lo despalomeado queda
 en `STATE.hidden_curves` (`"fv:sim"`, `"fv:teo"`, `"ic"`) y no cuenta para la
@@ -221,7 +240,7 @@ describiendo la corrida que se ve.
 |---|---|---|
 | CSV | `experiment_csv` | `p,media,ic_bajo,ic_alto,simulaciones`, una fila por p |
 | JSON | `experiment_json` | todo lo necesario para repetirlo (la red en el formato de importación) y la curva; `completo` es falso si se detuvo |
-| SVG | `chart_svg` | la gráfica tal como se ve (todas las curvas a la vista, **sin leyenda**), con su estilo en `CHART_SVG_STYLE` porque fuera de la página no hay `app.css` |
+| SVG | `chart_svg` | la gráfica tal como se ve (todas las curvas a la vista, **sin leyenda**), en el tema a la vista, con su estilo en `chart_svg_style()` porque fuera de la página no hay `app.css` |
 
 El CSV y el JSON son del experimento en detalle: uno por algoritmo, con el mismo
 formato que antes de haber varios.

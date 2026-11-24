@@ -1,6 +1,7 @@
-/* Paleta. Es lo único que cambia entre el tema claro y el oscuro: el resto del
-   archivo solo usa estas variables. Los literales que el SVG necesita fuera de
-   aquí (nodos, aristas y la gráfica descargada) están en app.py y geometry.py. */
+/* Paleta. Hay dos temas y el resto del archivo solo usa estas variables: «café»
+   (el predefinido, aquí en :root) y «claro» (más abajo). Los cambia el botón
+   #theme-btn desde app.py (TEMAS), que repite los pocos literales que el SVG
+   necesita fuera de la página; los de los nodos están en geometry.py (PALETAS). */
 :root {
   color-scheme: dark;
   --page: #15120f;
@@ -34,6 +35,34 @@
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
+:root[data-theme="claro"] {
+  color-scheme: light;
+  --page: #ffffff;
+  --side: #f4f6f9;
+  --field: #ffffff;
+  --sunken: #f1f3f7;
+  --line: #d5dae3;
+  --line-strong: #8690a2;
+  --ink: #14213d;
+  --muted: #5b6577;
+  --faint: #8a93a3;
+  /* Los dos únicos colores: el valor 0 y el valor 1 de un nodo. */
+  --v0: #2f5bd8;
+  --on-v0: #ffffff;
+  --v1: #e8871e;
+  --v0-soft: rgb(47 91 216 / 10%);
+  --v0-ring: rgb(47 91 216 / 30%);
+  --v1-soft: rgb(232 135 30 / 16%);
+  --danger: #c2334d;
+  --on-danger: #ffffff;
+  --danger-soft: rgb(194 51 77 / 9%);
+  --action: var(--ink);
+  --action-hover: #24365f;
+  --on-action: #ffffff;
+  --shadow: 0 6px 24px rgb(20 33 61 / 14%);
+  --scrim: rgb(20 33 61 / 40%);
+}
+
 /* Fuentes autoalojadas (OFL, ver fonts/): la app no depende de un CDN de fuentes. */
 @font-face { font-family: "STIX Two Text"; font-style: normal; font-weight: 400 700; font-display: swap; src: url("../fonts/stix-two-text-latin-wght-normal.woff2") format("woff2"); }
 @font-face { font-family: "STIX Two Text"; font-style: italic; font-weight: 400 700; font-display: swap; src: url("../fonts/stix-two-text-latin-wght-italic.woff2") format("woff2"); }
@@ -63,15 +92,17 @@ button { -webkit-tap-highlight-color: transparent; }
 .loader-mark span:nth-child(3) { animation-delay: .28s; background: var(--v1); }
 @keyframes loader-pulse { 0%, 100% { transform: scale(.72); opacity: .55; } 50% { transform: scale(1); opacity: 1; } }
 
-/* ── Marco: una fila de cabecera (vistas a la izquierda, grafos a la derecha) ── */
-.app-container { display: grid; grid-template: auto minmax(0, 1fr) / auto minmax(0, 1fr); width: 100vw; height: 100vh; overflow: hidden; background: var(--page); }
+/* ── Marco: una fila de cabecera (vistas, grafos y el botón de tema) ── */
+.app-container { display: grid; grid-template: auto minmax(0, 1fr) / auto minmax(0, 1fr) auto; width: 100vw; height: 100vh; overflow: hidden; background: var(--page); }
 .view-tabs-bar { display: flex; grid-area: 1 / 1; gap: 22px; padding: 0 12px 0 20px; border-bottom: 1px solid var(--line); background: var(--side); }
-.view-tab { padding: 14px 0 12px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font-weight: 500; cursor: pointer; }
+.view-tab { padding: 14px 0 12px; white-space: nowrap; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font-weight: 500; cursor: pointer; }
 .view-tab:hover, .view-tab.active { color: var(--ink); }
 .view-tab.active { border-bottom-color: var(--ink); }
 
 .tabs-bar { grid-area: 1 / 2; min-width: 0; border-bottom: 1px solid var(--line); background: var(--side); }
-.tabs-list { display: flex; align-items: center; gap: 6px; height: 100%; overflow-x: auto; overflow-y: hidden; padding: 8px 20px; }
+.tabs-list { display: flex; align-items: center; gap: 6px; height: 100%; overflow-x: auto; overflow-y: hidden; padding: 8px 12px 8px 20px; }
+.theme-bar { display: flex; grid-area: 1 / 3; align-items: center; padding-right: 20px; border-bottom: 1px solid var(--line); background: var(--side); }
+.theme-bar .quiet-btn { padding: 5px 12px; white-space: nowrap; }
 .tabs-list > :first-child { margin-left: auto; }
 .tabs-list::-webkit-scrollbar { height: 4px; }
 .tabs-list::-webkit-scrollbar-thumb { border-radius: 2px; background: var(--line); }
@@ -86,7 +117,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .tab-new:hover { border-color: var(--ink); color: var(--ink); }
 
 .app-container:not(.view-analysis) .only-analysis, .app-container:not(.view-editor) .only-editor, .app-container:not(.view-code) .only-code, .view-code .not-code, .view-analysis .not-analysis { display: none !important; }
-.main-content { display: flex; grid-area: 2 / 1 / 3 / 3; min-height: 0; overflow: hidden; }
+.main-content { display: flex; grid-area: 2 / 1 / 3 / 4; min-height: 0; overflow: hidden; }
 
 /* ── Barra lateral: un formulario plano, sin tarjetas ──────────────────── */
 .sidebar { display: flex; flex: 0 0 300px; flex-direction: column; gap: 22px; overflow-y: auto; padding: 22px 20px 20px; border-right: 1px solid var(--line); background: var(--side); }
@@ -231,6 +262,7 @@ label.legend-item { color: var(--ink); cursor: pointer; }
 .canvas-container.shift-mode, .shift-mode .graph-node { cursor: crosshair; }
 .graph-canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 .canvas-grid { pointer-events: none; }
+#grid-dots circle { fill: var(--line); }
 .graph-node { cursor: move; }
 .graph-node text { font: 600 14px var(--sans); pointer-events: none; }
 .graph-node .node-name { fill: var(--muted); font-size: 12px; font-weight: 500; paint-order: stroke; stroke: var(--page); stroke-width: 4px; stroke-linejoin: round; }
@@ -243,7 +275,7 @@ label.legend-item { color: var(--ink); cursor: pointer; }
 .edge-animated .edge-path { stroke-dasharray: 9 7; animation: edge-flow .65s linear infinite; }
 @keyframes edge-flow { to { stroke-dashoffset: -16; } }
 /* La punta toma el color de su arista; donde no hay context-stroke queda el fill del marcador. */
-#arrowhead path { fill: context-stroke; }
+#arrowhead path { fill: var(--faint); fill: context-stroke; }
 .edge-label rect { fill: var(--field); stroke: var(--line-strong); }
 .edge-label text { fill: var(--ink); font: 500 12px var(--sans); pointer-events: none; }
 .connection-line { fill: none; stroke: var(--v0); stroke-width: 2; stroke-dasharray: 5 5; pointer-events: none; }
@@ -276,10 +308,13 @@ label.legend-item { color: var(--ink); cursor: pointer; }
 
 /* ── Pantallas angostas: la barra lateral pasa arriba ──────────────────── */
 @media (max-width: 760px) {
-  .app-container { grid-template: auto auto minmax(0, 1fr) / minmax(0, 1fr); }
-  .tabs-bar { grid-area: 2 / 1; }
+  .app-container { grid-template: auto auto minmax(0, 1fr) / minmax(0, 1fr) auto; }
+  .view-tabs-bar { min-width: 0; gap: 14px; overflow-x: auto; padding: 0 8px 0 16px; }
+  .theme-bar { grid-area: 1 / 2; padding-right: 16px; }
+  .theme-bar .quiet-btn { padding: 5px 8px; }
+  .tabs-bar { grid-area: 2 / 1 / 3 / 3; }
   .tabs-list > :first-child { margin-left: 0; }
-  .main-content { grid-area: 3 / 1; flex-direction: column; }
+  .main-content { grid-area: 3 / 1 / 4 / 3; flex-direction: column; }
   .sidebar { flex: 0 0 auto; max-height: 45vh; border-right: 0; border-bottom: 1px solid var(--line); }
   .analysis-main, .code-main { padding: 20px 16px 32px; }
 }

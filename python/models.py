@@ -91,6 +91,8 @@ class AppState:
     tabs: list[GraphTab] = field(default_factory=lambda: [GraphTab("tab_0", "Grafo 1")])
     active_tab_id: str = "tab_0"
     active_view: str = "analysis"
+    # Clave de TEMAS (app.py): "cafe" o "claro".
+    theme: str = "cafe"
     algorithm: str = "fv"
     # Valores de los parámetros por algoritmo: {"amp": {"agreed": 0.5}, ...}.
     # Se llena bajo demanda desde los defaults de ALGORITMOS, de modo que cambiar

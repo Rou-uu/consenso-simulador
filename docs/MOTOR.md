@@ -122,6 +122,9 @@ Claves opcionales:
 | `parametros` | `{"nombre": ("etiqueta", por_omision)}`; la interfaz arma los campos | sin campos |
 | `lider` | `True` si el último nodo es el líder; el editor lo dibuja como cuadrado | todos los nodos son círculos |
 
+Escribe `ronda`, `batch` y `actualizo` como `def` en `algoritmos.py`, no como
+`lambda`: la pestaña «Código» los muestra y los copia con `inspect.getsource`.
+
 Para que el arnés lo cubra, agrega su clave a la tupla `ALGORITMOS` de
 `scripts/equivalencia.py` y regrábalo (agregar claves no altera las viejas). Un
 algoritmo que no acepta cualquier grafo, como `courteous` o `ciclo`, lleva casos

@@ -697,6 +697,74 @@ comprobar((arbol.get("width"), arbol.get("height")) == ("800", "440"), "SVG: dec
 app.STATE.algorithm = "fv"
 campo_semilla.value = ""
 
+print("\nEl código de los algoritmos de casa se puede copiar y corre igual")
+COMPLETO_5 = {
+    "directed": True,
+    "nodes": [{"id": f"n{i}", "value": v} for i, v in enumerate([0, 0, 1, 1, 1])],
+    "edges": [{"id": f"e{i}{j}", "source": f"n{i}", "target": f"n{j}", "weight": "0.6"}
+              for i in range(5) for j in range(5) if i != j],
+}
+try:
+    app.codigo_de("zz")
+    comprobar(False, "un algoritmo hecho con lambdas debía rechazarse al copiar")
+except ValueError:
+    comprobar(True, "un algoritmo hecho con lambdas se rechaza al copiar, en vez de dar código roto")
+for clave in ("fv", "amp", "courteous", "ciclo"):
+    fuente = app.codigo_de(clave)
+    copia = usuario.instalar(fuente)
+    comprobar("parametros" not in copia and copia.get("lider") == ALGORITMOS[clave].get("lider"),
+              f"{clave}: la copia instala, sin parámetros y con el mismo líder")
+    for modo in ("por_arista", "por_emisor"):
+        np.random.seed(5)
+        original = run_round(COMPLETO_5, algorithm=clave, modo=modo)
+        np.random.seed(5)
+        copiado = run_round(COMPLETO_5, algorithm=usuario.CLAVE, modo=modo)
+        comprobar((original["values"], original["propagation"]) == (copiado["values"], copiado["propagation"]),
+                  f"{clave} ({modo}): una ronda de la copia da lo mismo que el original")
+    np.random.seed(5)
+    curva_original = list(iter_sweep(COMPLETO_5, algorithm=clave, num_p_points=5,
+                                     total_simulations_per_p=30, iterations=1))[-1]["points"]
+    np.random.seed(5)
+    curva_copia = list(iter_sweep(COMPLETO_5, algorithm=usuario.CLAVE, num_p_points=5,
+                                  total_simulations_per_p=30, iterations=1))[-1]["points"]
+    comprobar(curva_original == curva_copia, f"{clave}: el sweep de la copia (con su batch) da la misma curva")
+ALGORITMOS.pop(usuario.CLAVE, None)
+
+print("\nLa pestaña «Código»")
+app.STATE.algorithm = "courteous"
+app.change_view("code")
+comprobar("view-code" in clases and "view-analysis" not in clases, "«Código» es una pestaña propia")
+comprobar(not DOCUMENTO.getElementById("builtin-code").hidden and DOCUMENTO.getElementById("user-code-panel").hidden,
+          "con un algoritmo de casa se ve su código, no el editor")
+comprobar(DOCUMENTO.getElementById("builtin-code-text").textContent == app.codigo_de("courteous"),
+          "el código que se ve es el mismo que se copia")
+
+editor = DOCUMENTO.getElementById("user-code")
+app.PLANTILLA_USUARIO = "# ejemplo"
+editor.value = "# ejemplo"
+app.edit_copy()
+comprobar(app.STATE.algorithm == usuario.CLAVE and editor.value == app.codigo_de("courteous")
+          and app.STATE.user_source == editor.value,
+          "con la plantilla intacta, «Editar una copia» la reemplaza y elige el algoritmo propio")
+comprobar(DOCUMENTO.getElementById("builtin-code").hidden and not DOCUMENTO.getElementById("user-code-panel").hidden,
+          "y la pestaña pasa al editor")
+
+app.STATE.algorithm = "fv"
+app.render_controls()
+editor.value = "# mi trabajo"
+app.STATE.user_source = "# mi trabajo"
+DOCUMENTO.getElementById("app-dialog").hidden = True
+app.edit_copy()
+comprobar(editor.value == "# mi trabajo" and app.STATE.algorithm == "fv" and not DOCUMENTO.getElementById("app-dialog").hidden,
+          "si el editor tiene cambios, pregunta antes de reemplazar y no toca nada")
+app.close_dialog()
+comprobar(editor.value == "# mi trabajo", "cancelar conserva lo escrito")
+app.edit_copy()
+app.submit_dialog()
+comprobar(editor.value == app.codigo_de("fv") and app.STATE.algorithm == usuario.CLAVE, "aceptar lo reemplaza")
+app.STATE.algorithm = "fv"
+app.change_view("analysis")
+
 print()
 if FALLAS:
     print(f"FALLA — {len(FALLAS)} comprobación(es):")

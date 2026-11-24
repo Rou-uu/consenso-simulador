@@ -14,13 +14,15 @@ parchea. No hay framework ni diffing.
 
 ## Las dos pantallas
 
-La app abre en el **análisis** (la gráfica); el editor del grafo es la pantalla
-**Red**, a la que se entra con «Editar red» y se sale con «← Volver al análisis».
-`STATE.active_view` vale `"analysis"` o `"editor"`, y `render_controls()` pone la
-clase `view-analysis` / `view-editor` en `#app`.
+La app abre en el **análisis** (la gráfica). Junto a él está la pestaña
+**Código**, y el editor del grafo es la pantalla **Red**, a la que se entra con
+«Editar red» y se sale con «← Volver al análisis». `STATE.active_view` vale
+`"analysis"`, `"code"` o `"editor"`, y `render_controls()` pone la clase
+`view-analysis` / `view-code` / `view-editor` en `#app`.
 
 Hay **una sola** barra lateral. Lo que es de una pantalla lleva la clase
-`only-analysis` u `only-editor` y el CSS lo esconde en la otra; el bloque
+`only-analysis`, `only-code` u `only-editor` (o `not-code`) y el CSS lo esconde
+en las demás; el bloque
 «Algoritmo» no lleva ninguna y se ve en las dos, así que la ronda del editor y el
 sweep usan siempre la misma configuración. Mostrar u ocultar algo es cuestión de
 clases en `index.html`, no de Python.
@@ -120,6 +122,26 @@ es siempre `p` en [0, 1], así que sus marcas y su rejilla están fijas en
 `index.html` con esos mismos números; si cambian las constantes, cambian ahí también.
 El eje Y usa números redondos (`nice_axis`), y el tooltip
 (`on_chart_pointer_move`) muestra el punto más cercano a `p`.
+
+## La pestaña «Código»
+
+`render_code_view()` decide qué se ve: con «Algoritmo propio…» elegido, el editor
+grande (`#user-code`); con un algoritmo de casa, su código de solo lectura. Los
+errores del código propio siguen en la barra lateral (`#user-code-error`), que se
+ve en las tres pantallas, porque el fallo puede venir de la ronda o del sweep.
+
+`codigo_de(clave)` arma ese código con `inspect.getsource`: las funciones de la
+entrada (`ronda`, `batch`, `actualizo`) y, de forma transitiva, las funciones de
+`algoritmos.py` que llaman, más la línea `ALGORITMO = {...}`. No copia
+`parametros` (el algoritmo propio recibe `params` vacío, así que cada
+`params.get(...)` usa su valor por omisión; la cabecera de la copia lo dice).
+Una entrada hecha con `lambda` no se puede copiar y lo dice en vez de dar código
+roto. `smoke_ui.py` instala la copia de cada algoritmo de casa como algoritmo
+propio y comprueba que una ronda (en los dos modos) y el sweep den exactamente lo
+mismo que el original.
+
+«Editar una copia» reemplaza el editor sin preguntar solo si conserva el
+ejemplo de `index.html` (`PLANTILLA_USUARIO`); si tiene cambios, pide confirmación.
 
 ## Descargas
 

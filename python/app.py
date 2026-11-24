@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import html
+import inspect
 import json
 import math
 import random
@@ -17,6 +18,7 @@ from pyodide.ffi import create_proxy, to_js
 
 from geometry import edge_geometry, fit_transform, has_reverse, node_center, value_color
 from models import AppState, Edge, GraphTab, Node, SimulationState
+from simulation import algoritmos as modulo_algoritmos
 from simulation.algoritmos import ALGORITMOS
 from simulation.usuario import CLAVE as CLAVE_USUARIO
 
@@ -40,6 +42,11 @@ PAN: dict[str, Any] = {}
 LAST_NODE_CLICK: dict[str, Any] = {}
 DIALOG_CALLBACK: Callable[[str], bool] | None = None
 CHART_POINTS: list[dict[str, float]] = []
+#: El código de ejemplo con que arranca el editor (el de index.html). Mientras el
+#: textarea lo conserve, «Editar una copia» lo reemplaza sin preguntar.
+PLANTILLA_USUARIO = ""
+#: Un solo proxy para devolver «Copiar» a su texto: uno por clic haría crecer PROXIES.
+COPY_RESET = None
 CHART_MAX_Y = 1.0
 
 
@@ -209,7 +216,9 @@ def render_user_code() -> None:
     """
 
     propio = STATE.algorithm == CLAVE_USUARIO
-    set_hidden("user-algorithm", not propio)
+    # En «Código» la caja solo tendría el error: sin error quedaría un marco vacío.
+    sin_nada = STATE.active_view == "code" and by_id("user-code-error").hidden
+    set_hidden("user-algorithm", not propio or sin_nada)
     if propio and not STATE.user_source:
         STATE.user_source = str(by_id("user-code").value)
 
@@ -222,10 +231,12 @@ def show_user_code_error(mensaje: str) -> None:
     caja = by_id("user-code-error")
     caja.textContent = mensaje
     caja.hidden = False
+    set_hidden("user-algorithm", False)
 
 
 def clear_user_code_error() -> None:
     by_id("user-code-error").hidden = True
+    render_user_code()
 
 
 def user_source() -> str | None:
@@ -234,6 +245,122 @@ def user_source() -> str | None:
     if STATE.algorithm != CLAVE_USUARIO:
         return None
     return STATE.user_source or str(by_id("user-code").value)
+
+
+#: Las claves de una entrada de ALGORITMOS que son funciones, en el orden en que
+#: se escriben en el `ALGORITMO` copiado.
+CLAVES_FUNCION = ("ronda", "batch", "actualizo")
+
+
+def codigo_de(clave: str) -> str:
+    """El código de un algoritmo de casa, listo para pegarse como algoritmo propio.
+
+    Junta las funciones de su entrada (`ronda`, `batch`, `actualizo`) y, de forma
+    transitiva, las funciones de `algoritmos.py` que esas llaman (p. ej. `ciclo`
+    usa `_regular` y `_binarios`), en el orden del archivo, y cierra con el
+    diccionario `ALGORITMO`. `parametros` no se copia: el algoritmo propio recibe
+    `params` vacío y cada `params.get(...)` usa su valor por omisión.
+    """
+    entrada = ALGORITMOS[clave]
+    funciones: dict[str, Any] = {}
+    pendientes = [entrada[k] for k in CLAVES_FUNCION if k in entrada]
+    for funcion in pendientes:
+        # getsource de una lambda devuelve la línea del diccionario, no una función.
+        if funcion.__name__ == "<lambda>" or funcion.__module__ != modulo_algoritmos.__name__:
+            raise ValueError(
+                f"«{entrada['nombre']}» no se puede copiar: sus funciones deben ser `def` de algoritmos.py."
+            )
+    while pendientes:
+        funcion = pendientes.pop()
+        if funcion.__name__ in funciones:
+            continue
+        funciones[funcion.__name__] = funcion
+        for nombre in funcion.__code__.co_names:
+            usada = getattr(modulo_algoritmos, nombre, None)
+            if inspect.isfunction(usada) and usada.__module__ == modulo_algoritmos.__name__:
+                pendientes.append(usada)
+
+    cabecera = [f"# Copia de «{entrada['nombre']}», de python/simulation/algoritmos.py."]
+    if entrada.get("parametros"):
+        nombres = ", ".join(
+            f"{nombre} = {por_omision!r}" for nombre, (_, por_omision) in entrada["parametros"].items()
+        )
+        cabecera.append(
+            f"# Aquí `params` llega vacío: usa su valor por omisión ({nombres}). Cámbialo en el código."
+        )
+    cuerpo = [
+        inspect.getsource(funcion)
+        for funcion in sorted(funciones.values(), key=lambda f: f.__code__.co_firstlineno)
+    ]
+    claves = [f'"nombre": {json.dumps(entrada["nombre"] + " (copia)", ensure_ascii=False)}']
+    for k, v in entrada.items():
+        if k in CLAVES_FUNCION:
+            claves.append(f'"{k}": {v.__name__}')
+        elif k not in ("nombre", "parametros"):
+            claves.append(f'"{k}": {v!r}')
+    return "\n".join(cabecera) + "\n\n\n" + "\n\n".join(cuerpo) + "\n\nALGORITMO = {" + ", ".join(claves) + "}\n"
+
+
+def render_code_view() -> None:
+    """La pestaña «Código»: el editor si el algoritmo es propio, si no su código."""
+    propio = STATE.algorithm == CLAVE_USUARIO
+    set_hidden("user-code-panel", not propio)
+    set_hidden("builtin-code", propio)
+    if propio:
+        set_text("code-subtitle", "Tu algoritmo propio: se usa al simular y al correr el sweep "
+                                  "mientras esté elegido en el selector.")
+        return
+    set_text("code-subtitle", f"«{algoritmo_activo()['nombre']}», de python/simulation/algoritmos.py. "
+                              "Solo lectura: para cambiarlo, edita una copia.")
+    codigo = by_id("builtin-code-text")
+    if codigo.getAttribute("data-clave") == STATE.algorithm:
+        return  # ya está puesto: render_controls corre seguido y el texto es largo
+    try:
+        texto, copiable = codigo_de(STATE.algorithm), True
+    except ValueError as error:
+        texto, copiable = str(error), False
+    codigo.textContent = texto
+    codigo.setAttribute("data-clave", STATE.algorithm)
+    by_id("edit-copy-btn").disabled = not copiable
+    by_id("copy-code-btn").disabled = not copiable
+
+
+def copy_code(*_args) -> None:
+    try:
+        window.navigator.clipboard.writeText(codigo_de(STATE.algorithm))
+    except Exception:
+        notify("No se pudo copiar al portapapeles. Selecciona el código y cópialo a mano.")
+        return
+    set_text("copy-code-btn", "Copiado ✓")
+    window.setTimeout(COPY_RESET, 1500)
+
+
+def edit_copy(*_args) -> None:
+    """Pone una copia del algoritmo activo en el editor y elige «Algoritmo propio»."""
+    clave = STATE.algorithm
+    fuente = codigo_de(clave)
+
+    def aplicar(_valor: str = "") -> bool:
+        by_id("user-code").value = fuente
+        STATE.user_source = fuente
+        STATE.algorithm = CLAVE_USUARIO
+        clear_user_code_error()
+        render_controls()
+        render_canvas()  # el líder depende del algoritmo
+        return True
+
+    actual = str(by_id("user-code").value)
+    if actual.strip() and actual != PLANTILLA_USUARIO:
+        open_dialog(
+            "Reemplazar tu algoritmo",
+            f"Tu algoritmo propio tiene cambios. ¿Reemplazarlo por una copia de "
+            f"«{ALGORITMOS[clave]['nombre']}»? Lo que escribiste se pierde.",
+            aplicar,
+            input_mode=False,
+            accept_label="Reemplazar",
+        )
+        return
+    aplicar()
 
 
 def render_algorithm_params() -> None:
@@ -710,12 +837,14 @@ def render_controls() -> None:
         )
     set_hidden("shift-indicator", not STATE.shift_pressed)
     by_id("canvas-container").classList.toggle("shift-mode", STATE.shift_pressed)
-    analysis = STATE.active_view == "analysis"
-    # Las secciones .only-analysis / .only-editor se esconden por CSS según esta clase.
-    by_id("app").classList.toggle("view-analysis", analysis)
-    by_id("app").classList.toggle("view-editor", not analysis)
-    by_id("view-analysis").classList.toggle("active", analysis)
-    by_id("view-analysis").setAttribute("aria-selected", str(analysis).lower())
+    # Las secciones .only-analysis / .only-editor / .only-code se esconden por CSS
+    # según esta clase.
+    for vista in ("analysis", "editor", "code"):
+        by_id("app").classList.toggle(f"view-{vista}", STATE.active_view == vista)
+    for vista in ("analysis", "code"):
+        by_id(f"view-{vista}").classList.toggle("active", STATE.active_view == vista)
+        by_id(f"view-{vista}").setAttribute("aria-selected", str(STATE.active_view == vista).lower())
+    render_code_view()
     set_text("message-mode-help", MODOS_AYUDA.get(STATE.message_mode, ""))
     render_sweep_plan()
     if tab.nodes:
@@ -1751,6 +1880,10 @@ def bind_events() -> None:
     listen(by_id("toggle-simulation-btn"), "click", toggle_simulation)
     listen(by_id("reset-simulation-btn"), "click", reset_simulation)
     listen(by_id("view-analysis"), "click", lambda _event: change_view("analysis"))
+    listen(by_id("view-code"), "click", lambda _event: change_view("code"))
+    listen(by_id("open-code-btn"), "click", lambda _event: change_view("code"))
+    listen(by_id("copy-code-btn"), "click", copy_code)
+    listen(by_id("edit-copy-btn"), "click", edit_copy)
     listen(by_id("edit-network-btn"), "click", lambda _event: change_view("editor"))
     listen(by_id("back-to-analysis-btn"), "click", lambda _event: change_view("analysis"))
     listen(by_id("zoom-in-btn"), "click", lambda _event: zoom_by(1.2))
@@ -1770,6 +1903,9 @@ def bind_events() -> None:
 
 
 def main() -> None:
+    global PLANTILLA_USUARIO, COPY_RESET
+    PLANTILLA_USUARIO = str(by_id("user-code").value)
+    COPY_RESET = retain(lambda: set_text("copy-code-btn", "Copiar"))
     bind_events()
     start_engine_worker()
     render_all()

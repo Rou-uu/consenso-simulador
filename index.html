@@ -19,6 +19,7 @@
 
       <nav class="view-tabs-bar" aria-label="Vistas de la aplicación" role="tablist">
         <button id="view-analysis" class="view-tab active" role="tab" aria-selected="true" data-view="analysis">Análisis de convergencia</button>
+        <button id="view-code" class="view-tab" role="tab" aria-selected="false" data-view="code">Código</button>
       </nav>
 
       <section class="tabs-bar" aria-label="Pestañas de grafos">
@@ -86,30 +87,8 @@
             <!-- Ranura de código propio. El fuente viaja con cada simulación y se
                  compila dentro del Worker, nunca aquí. Ver docs/09 §A.12. -->
             <div id="user-algorithm" class="user-algorithm" hidden>
-              <label class="field-label" for="user-code">Tu algoritmo</label>
-              <textarea id="user-code" class="user-code" spellcheck="false" rows="16" aria-describedby="user-code-hint">
-# Cada nodo que recibió mensajes adopta el promedio de lo que le llegó.
-PESO = 1.0    # las constantes van aquí: la interfaz aún no edita parámetros
-
-def promedio(matrix, values, messages, params):
-    nuevos = []
-    # OJO: messages[target, source] viene transpuesta.
-    for objetivo, recibidos in enumerate(messages):
-        emisores = np.where(recibidos != 0)[0]
-        if len(emisores) == 0:
-            nuevos.append((values[objetivo], None))
-        else:
-            nuevos.append((PESO * np.mean(values[emisores]), None))
-    return nuevos
-
-
-ALGORITMO = {"nombre": "Promedio de lo recibido", "ronda": promedio}
-</textarea>
-              <p id="user-code-hint" class="user-code-hint">
-                Se compila al simular o al ejecutar el sweep. Tienes <code>np</code>. Las
-                claves son las mismas que en <code>algoritmos.py</code>; agrega
-                <code>"batch"</code> para que el barrido sea rápido.
-              </p>
+              <p class="field-help not-code">Tu algoritmo se escribe en la pestaña «Código».</p>
+              <button id="open-code-btn" class="quiet-btn not-code" type="button">Abrir el código</button>
               <pre id="user-code-error" class="user-code-error" hidden></pre>
             </div>
           </section>
@@ -210,6 +189,52 @@ ALGORITMO = {"nombre": "Promedio de lo recibido", "ronda": promedio}
             <button id="download-json-btn" class="quiet-btn" type="button" disabled title="El experimento completo, con su red, algoritmo y semilla, para repetirlo">JSON</button>
             <button id="download-svg-btn" class="quiet-btn" type="button" disabled title="La gráfica como imagen vectorial">SVG</button>
             <small class="field-help">CSV: la curva. JSON: el experimento completo, para repetirlo. SVG: la gráfica.</small>
+          </div>
+        </section>
+
+        <section class="code-main only-code" aria-labelledby="code-heading">
+          <header class="analysis-header">
+            <h2 id="code-heading">Código del algoritmo</h2>
+            <p id="code-subtitle" class="analysis-subtitle"></p>
+          </header>
+          <!-- Algoritmo de casa: su código (codigo_de en app.py), de solo lectura. -->
+          <div id="builtin-code" class="code-panel">
+            <div class="code-actions">
+              <button id="edit-copy-btn" class="simulate-btn" type="button">Editar una copia como algoritmo propio</button>
+              <button id="copy-code-btn" class="quiet-btn" type="button">Copiar</button>
+            </div>
+            <pre class="code-view" tabindex="0" aria-label="Código del algoritmo"><code id="builtin-code-text"></code></pre>
+          </div>
+          <!-- Algoritmo propio. El fuente viaja con cada simulación y se compila
+               dentro del Worker, nunca aquí. Ver docs/09 §A.12. -->
+          <div id="user-code-panel" class="code-panel">
+            <label class="field-label" for="user-code">Tu algoritmo</label>
+            <textarea id="user-code" class="user-code" spellcheck="false" aria-describedby="user-code-hint">
+# Cada nodo que recibió mensajes adopta el promedio de lo que le llegó.
+PESO = 1.0    # las constantes van aquí: la interfaz aún no edita parámetros
+
+def promedio(matrix, values, messages, params):
+    nuevos = []
+    # OJO: messages[target, source] viene transpuesta.
+    for objetivo, recibidos in enumerate(messages):
+        emisores = np.where(recibidos != 0)[0]
+        if len(emisores) == 0:
+            nuevos.append((values[objetivo], None))
+        else:
+            nuevos.append((PESO * np.mean(values[emisores]), None))
+    return nuevos
+
+
+ALGORITMO = {"nombre": "Promedio de lo recibido", "ronda": promedio}
+</textarea>
+            <p id="user-code-hint" class="user-code-hint">
+                Se compila al simular o al ejecutar el sweep, y los errores salen en la
+                barra lateral. Tienes <code>np</code>. Las claves de <code>ALGORITMO</code>
+                son las de <code>algoritmos.py</code>; agrega <code>"batch"</code> para que
+                el sweep sea rápido. Ojo: en <code>ronda</code>,
+                <code>messages[target, source]</code> viene transpuesta; en
+                <code>batch</code>, <code>fired[s, source, target]</code> no.
+              </p>
           </div>
         </section>
 

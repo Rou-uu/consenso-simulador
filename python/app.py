@@ -45,6 +45,23 @@ CHART_MAX_Y = 1.0
 # su código solo existe dentro del Worker (`simulation.usuario`).
 RANURA_USUARIO = {"nombre": "Algoritmo propio…"}
 
+#: Lo que se explica bajo el selector de paso de mensajes (los modos del motor).
+MODOS_AYUDA = {
+    "por_arista": "Cada arista sortea por separado si entrega su mensaje (con probabilidad p). "
+                  "En un grafo no dirigido, a→b y b→a comparten el mismo sorteo.",
+    "por_emisor": "Cada nodo sortea una sola vez por ronda y ese sorteo vale para todas sus aristas. "
+                  "Con pesos iguales, como en el sweep, su mensaje llega a todos sus vecinos o a ninguno.",
+}
+
+#: (mínimo, máximo) de cada campo del sweep. Son los límites de `iter_sweep`, y los
+#: mismos que los min/max de index.html.
+SWEEP_LIMITS = {
+    "p-points-input": (2, 1001),
+    "simulations-input": (1, 50_000),
+    "iterations-input": (1, 1000),
+    "rounds-input": (1, 1000),
+}
+
 
 def algoritmo_activo() -> dict[str, Any]:
     if STATE.algorithm == CLAVE_USUARIO:
@@ -536,9 +553,10 @@ def on_chart_pointer_move(event) -> None:
     chart_bounds = tooltip.parentElement.getBoundingClientRect()
     local_x = float(event.clientX) - float(chart_bounds.left)
     local_y = float(event.clientY) - float(chart_bounds.top)
-    tooltip.style.left = f"{min(local_x + 12.0, max(4.0, float(chart_bounds.width) - 176.0)):.1f}px"
+    tooltip.hidden = False  # visible antes de medirlo: oculto mide 0 de ancho
+    ancho = float(tooltip.offsetWidth or 176.0)
+    tooltip.style.left = f"{max(4.0, min(local_x + 12.0, float(chart_bounds.width) - ancho - 4.0)):.1f}px"
     tooltip.style.top = f"{max(4.0, local_y - 68.0):.1f}px"
-    tooltip.hidden = False
 
 
 def hide_chart_tooltip(*_args) -> None:
@@ -589,6 +607,17 @@ def render_controls() -> None:
     by_id("app").classList.toggle("view-editor", not analysis)
     by_id("view-analysis").classList.toggle("active", analysis)
     by_id("view-analysis").setAttribute("aria-selected", str(analysis).lower())
+    set_text("message-mode-help", MODOS_AYUDA.get(STATE.message_mode, ""))
+    render_sweep_plan()
+    if tab.nodes:
+        valores = [float(node.value) for node in tab.nodes]
+        muestra = ", ".join(number_label(v) for v in valores[:12]) + (", …" if len(valores) > 12 else "")
+        set_text(
+            "network-values",
+            f"Valores: {muestra}. Discrepancia inicial: {number_label(max(valores) - min(valores))}.",
+        )
+    else:
+        set_text("network-values", "Sin nodos: entra a «Editar red» para armar una.")
     set_text(
         "network-summary",
         f"{tab.name}: {len(tab.nodes)} nodo{'' if len(tab.nodes) == 1 else 's'} · "
@@ -1091,6 +1120,7 @@ def on_algorithm_change(event) -> None:
 
 def on_message_mode_change(event) -> None:
     STATE.message_mode = str(event.target.value)
+    set_text("message-mode-help", MODOS_AYUDA.get(STATE.message_mode, ""))
 
 
 def on_param_change(event) -> None:
@@ -1397,11 +1427,49 @@ def change_view(view: str) -> None:
         fit_view()
 
 
-def positive_int(element_id: str, minimum: int) -> int:
+def sweep_field(element_id: str) -> int:
+    """El valor del campo llevado a sus límites. Vacío o ilegible cuenta como el mínimo."""
+    low, high = SWEEP_LIMITS[element_id]
     try:
-        return max(minimum, int(float(str(by_id(element_id).value))))
-    except ValueError:
-        return minimum
+        return min(high, max(low, int(float(str(by_id(element_id).value)))))
+    except (ValueError, OverflowError):
+        return low
+
+
+def sweep_plan() -> dict[str, int]:
+    """Lo que correrá el sweep con los campos actuales.
+
+    Repite el reparto de `iter_sweep` (simulaciones por pasada y recorte de
+    pasadas); smoke_ui comprueba que los dos coincidan.
+    """
+    pedidas = sweep_field("simulations-input")
+    por_pasada = max(1, pedidas // sweep_field("iterations-input"))
+    pasadas = min(sweep_field("iterations-input"), pedidas // por_pasada)
+    return {
+        "puntos": sweep_field("p-points-input"),
+        "pedidas": pedidas,
+        "por_pasada": por_pasada,
+        "pasadas": pasadas,
+        "rondas": sweep_field("rounds-input"),
+    }
+
+
+def render_sweep_plan(*_args) -> None:
+    plan = sweep_plan()
+    por_p = plan["por_pasada"] * plan["pasadas"]
+
+    def miles(n: int) -> str:
+        return f"{n:,}".replace(",", " ")
+
+    rondas = "1 ronda" if plan["rondas"] == 1 else f"{plan['rondas']} rondas"
+    texto = (
+        f"{plan['puntos']} valores de p × {miles(por_p)} simulaciones = "
+        f"{miles(plan['puntos'] * por_p)} simulaciones de {rondas}, "
+        f"en {plan['pasadas']} pasadas de {miles(plan['por_pasada'])} por p."
+    )
+    if por_p != plan["pedidas"]:
+        texto += f" Pediste {miles(plan['pedidas'])}: en pasadas iguales caben {miles(por_p)}."
+    set_text("sweep-plan", texto)
 
 
 def set_sweep_inputs_disabled(disabled: bool) -> None:
@@ -1434,10 +1502,10 @@ def start_sweep(*_args) -> None:
         "algorithmParams": algorithm_params(),
         "modo": STATE.message_mode,
         "fuente": user_source(),
-        "numPPoints": positive_int("p-points-input", 2),
-        "totalSimulationsPerP": positive_int("simulations-input", 1),
-        "iterations": positive_int("iterations-input", 1),
-        "rounds": positive_int("rounds-input", 1),
+        "numPPoints": sweep_field("p-points-input"),
+        "totalSimulationsPerP": sweep_field("simulations-input"),
+        "iterations": sweep_field("iterations-input"),
+        "rounds": sweep_field("rounds-input"),
     }
     STATE.sweep_running = True
     set_sweep_inputs_disabled(True)
@@ -1530,6 +1598,7 @@ def bind_events() -> None:
     listen(by_id("zoom-in-btn"), "click", lambda _event: zoom_by(1.2))
     listen(by_id("zoom-out-btn"), "click", lambda _event: zoom_by(1 / 1.2))
     listen(by_id("fit-view-btn"), "click", fit_view)
+    listen(by_id("sweep-controls"), "input", render_sweep_plan)
     listen(by_id("sweep-run-btn"), "click", start_sweep)
     listen(by_id("sweep-stop-btn"), "click", stop_sweep)
     listen(by_id("sweep-chart-svg"), "pointermove", on_chart_pointer_move)

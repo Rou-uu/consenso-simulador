@@ -547,6 +547,40 @@ comprobar(
     "el resumen de la red cuenta los nodos de la pestaña activa",
 )
 
+print("\nLos parámetros del sweep se explican solos")
+from simulation.barrido import iter_sweep  # noqa: E402
+
+GRAFO_MINIMO = {"directed": True, "nodes": [{"id": "a", "value": 0}, {"id": "b", "value": 1}],
+                "edges": [{"id": "e", "source": "a", "target": "b", "weight": "1"}]}
+for pedidas, iteraciones in [(5000, 50), (1000, 3), (10, 50), (7, 7), (1, 1000), (50000, 1)]:
+    DOCUMENTO.getElementById("simulations-input").value = str(pedidas)
+    DOCUMENTO.getElementById("iterations-input").value = str(iteraciones)
+    plan = app.sweep_plan()
+    inicio = next(iter_sweep(GRAFO_MINIMO, total_simulations_per_p=pedidas, iterations=iteraciones))
+    comprobar(
+        (plan["por_pasada"], plan["pasadas"]) == (inicio["simsPerIteration"], inicio["iterations"]),
+        f"{pedidas} sims en {iteraciones} pasadas: la interfaz anuncia lo mismo que corre iter_sweep",
+    )
+DOCUMENTO.getElementById("simulations-input").value = "1000"
+DOCUMENTO.getElementById("iterations-input").value = "3"
+app.render_sweep_plan()
+comprobar("Pediste 1 000: en pasadas iguales caben 999" in DOCUMENTO.getElementById("sweep-plan").textContent,
+          "si el reparto recorta simulaciones, el plan lo dice")
+for valor, esperado in [("5000000", 50_000), ("", 1), ("abc", 1), ("-3", 1), ("inf", 1), ("12.7", 12)]:
+    DOCUMENTO.getElementById("simulations-input").value = valor
+    comprobar(app.sweep_field("simulations-input") == esperado, f"simulaciones = {valor!r} → {esperado}")
+app.on_message_mode_change(types.SimpleNamespace(target=types.SimpleNamespace(value="por_arista")))
+ayuda_arista = DOCUMENTO.getElementById("message-mode-help").textContent
+app.on_message_mode_change(types.SimpleNamespace(target=types.SimpleNamespace(value="por_emisor")))
+ayuda_emisor = DOCUMENTO.getElementById("message-mode-help").textContent
+comprobar(ayuda_arista and ayuda_emisor and ayuda_arista != ayuda_emisor, "cada modo de mensajes tiene su explicación")
+comprobar(set(app.MODOS_AYUDA) == set(re.findall(r'<option value="(por_[a-z]+)"', indice_html)),
+          "hay explicación para cada modo del selector, y para nada más")
+app.STATE.tab.nodes = [Node("a", 0), Node("b", 2.5)]
+app.render_controls()
+comprobar(DOCUMENTO.getElementById("network-values").textContent == "Valores: 0, 2.5. Discrepancia inicial: 2.5.",
+          "el resumen de la red muestra los valores y la discrepancia inicial")
+
 print()
 if FALLAS:
     print(f"FALLA — {len(FALLAS)} comprobación(es):")

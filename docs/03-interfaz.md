@@ -86,6 +86,25 @@ El selector `#message-mode-select` es fijo en `index.html` (los modos son del
 motor, no de cada algoritmo). `on_message_mode_change` guarda el valor en
 `STATE.message_mode`, y la ronda y el sweep lo mandan como `modo`.
 
+## Los parámetros del sweep
+
+Cada campo lleva su explicación en `index.html`, dentro de una burbuja
+(`.info-tip`) que aparece con el cursor o con el foco sobre su icono «i»; el
+campo la referencia con `aria-describedby`, así que un lector de pantalla la lee
+aunque no se vea. «Ejecutar sweep» vive en `.sweep-actions`, el último hijo de la
+barra lateral, con `position: sticky` para quedar siempre a la vista. `sweep_field()` los lleva
+a sus límites (`SWEEP_LIMITS`, los mismos que valida `iter_sweep`), así que un
+valor fuera de rango se acota en vez de terminar en un error del motor.
+
+`sweep_plan()` repite el reparto de `iter_sweep` (simulaciones por pasada y
+recorte de pasadas) para anunciar en `#sweep-plan` cuántas simulaciones van a
+correr, incluso cuando el reparto deja menos de las pedidas. Es una copia de dos
+líneas del motor: `smoke_ui.py` comprueba que coincida con el evento `start` de
+`iter_sweep`. Si cambias una, cambia la otra.
+
+La explicación de cada modo de paso de mensajes está en `MODOS_AYUDA`; un modo
+nuevo en el selector necesita su entrada ahí (`smoke_ui` lo vigila).
+
 ## La gráfica del sweep
 
 `render_chart(points)` dibuja la media y la banda del IC en `#sweep-chart-svg`

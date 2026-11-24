@@ -40,6 +40,7 @@
           <section class="panel-card only-analysis" aria-labelledby="network-heading">
             <h2 id="network-heading">Red</h2>
             <p id="network-summary" class="network-summary"></p>
+            <p id="network-values" class="field-help"></p>
             <button id="edit-network-btn" class="quiet-btn" type="button">Editar red</button>
           </section>
 
@@ -75,8 +76,9 @@
                    ALGORITMOS (python/simulation/algoritmos.py). Agregar un algoritmo no toca este archivo. -->
               <select id="algorithm-select" class="algorithm-select"></select>
               <div id="algorithm-params" class="agreed-input-wrapper" hidden></div>
-              <label class="field-label" for="message-mode-select">Paso de mensajes</label>
-              <select id="message-mode-select" class="algorithm-select">
+              <!-- El texto de la burbuja lo pone app.py (MODOS_AYUDA) según el modo elegido. -->
+              <span class="field-title"><label class="field-label" for="message-mode-select">Paso de mensajes</label><span class="info-tip"><button class="info-btn" type="button" aria-label="Qué es «Paso de mensajes»" aria-describedby="message-mode-help">i</button><span id="message-mode-help" class="info-bubble" role="tooltip"></span></span></span>
+              <select id="message-mode-select" class="algorithm-select" aria-describedby="message-mode-help">
                 <option value="por_arista">Por arista</option>
                 <option value="por_emisor">Broadcast</option>
               </select>
@@ -104,7 +106,7 @@ def promedio(matrix, values, messages, params):
 ALGORITMO = {"nombre": "Promedio de lo recibido", "ronda": promedio}
 </textarea>
               <p id="user-code-hint" class="user-code-hint">
-                Se compila al pulsar «Simular». Tienes <code>np</code>. Las
+                Se compila al simular o al ejecutar el sweep. Tienes <code>np</code>. Las
                 claves son las mismas que en <code>algoritmos.py</code>; agrega
                 <code>"batch"</code> para que el barrido sea rápido.
               </p>
@@ -124,21 +126,25 @@ ALGORITMO = {"nombre": "Promedio de lo recibido", "ronda": promedio}
 
           <section class="simulation-section only-analysis" aria-labelledby="sweep-heading">
             <h2 id="sweep-heading">Experimento</h2>
-            <div class="sweep-controls">
-              <label class="sweep-field" for="p-points-input">Puntos de p
-                <input id="p-points-input" type="number" min="2" max="1001" value="201" />
-              </label>
-              <label class="sweep-field" for="simulations-input">Simulaciones totales por p
-                <input id="simulations-input" type="number" min="1" max="50000" value="5000" />
-              </label>
-              <label class="sweep-field" for="iterations-input">Iteraciones (refinamiento)
-                <input id="iterations-input" type="number" min="1" max="1000" value="50" />
-              </label>
-              <label class="sweep-field" for="rounds-input">Rondas por simulación
-                <input id="rounds-input" type="number" min="1" max="1000" value="1" />
-              </label>
-              <button id="sweep-run-btn" class="sweep-run-btn" type="button" disabled>Ejecutar sweep</button>
-              <button id="sweep-stop-btn" class="sweep-stop-btn" type="button" hidden>Detener</button>
+            <!-- Los min/max son los límites de iter_sweep; app.py (SWEEP_FIELDS) los repite. -->
+            <div id="sweep-controls" class="sweep-controls">
+              <div class="sweep-field">
+                <span class="field-title"><label for="p-points-input">Puntos de p</label><span class="info-tip"><button class="info-btn" type="button" aria-label="Qué es «Puntos de p»" aria-describedby="p-points-help">i</button><span id="p-points-help" class="info-bubble" role="tooltip">Cuántos valores de p, repartidos de 0 a 1, se prueban. Más puntos, curva más fina. Entre 2 y 1001.</span></span></span>
+                <input id="p-points-input" type="number" min="2" max="1001" value="201" aria-describedby="p-points-help" />
+              </div>
+              <div class="sweep-field">
+                <span class="field-title"><label for="simulations-input">Simulaciones por p</label><span class="info-tip"><button class="info-btn" type="button" aria-label="Qué es «Simulaciones por p»" aria-describedby="simulations-help">i</button><span id="simulations-help" class="info-bubble" role="tooltip">Cuántas veces se repite el experimento en cada p. Más simulaciones, intervalo de confianza más angosto. Entre 1 y 50 000.</span></span></span>
+                <input id="simulations-input" type="number" min="1" max="50000" value="5000" aria-describedby="simulations-help" />
+              </div>
+              <div class="sweep-field">
+                <span class="field-title"><label for="iterations-input">Iteraciones (refinamiento)</label><span class="info-tip"><button class="info-btn" type="button" aria-label="Qué es «Iteraciones (refinamiento)»" aria-describedby="iterations-help">i</button><span id="iterations-help" class="info-bubble" role="tooltip">En cuántas pasadas se reparten esas simulaciones. No cambia el resultado: la curva aparece antes y se va afinando. Entre 1 y 1000.</span></span></span>
+                <input id="iterations-input" type="number" min="1" max="1000" value="50" aria-describedby="iterations-help" />
+              </div>
+              <div class="sweep-field">
+                <span class="field-title"><label for="rounds-input">Rondas por simulación</label><span class="info-tip"><button class="info-btn" type="button" aria-label="Qué es «Rondas por simulación»" aria-describedby="rounds-help">i</button><span id="rounds-help" class="info-bubble" role="tooltip">Rondas de paso de mensajes antes de medir la discrepancia final. Entre 1 y 1000.</span></span></span>
+                <input id="rounds-input" type="number" min="1" max="1000" value="1" aria-describedby="rounds-help" />
+              </div>
+              <p id="sweep-plan" class="sweep-plan" aria-live="polite"></p>
             </div>
           </section>
 
@@ -156,6 +162,11 @@ ALGORITMO = {"nombre": "Promedio de lo recibido", "ronda": promedio}
             </ul>
             <div id="shift-indicator" class="shift-indicator" hidden>⚡ Modo: Conectar nodos</div>
           </section>
+          <!-- Último hijo de la barra y sticky: siempre a la vista aunque se desplace. -->
+          <div class="sweep-actions only-analysis">
+            <button id="sweep-run-btn" class="sweep-run-btn" type="button" disabled>Ejecutar sweep</button>
+            <button id="sweep-stop-btn" class="sweep-stop-btn" type="button" hidden>Detener</button>
+          </div>
         </aside>
 
         <section class="analysis-main only-analysis" aria-labelledby="chart-heading">

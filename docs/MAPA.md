@@ -40,7 +40,7 @@ flowchart TB
 | `python/app.py` | estado (`STATE`), eventos, dibujo, mensajes al Worker | [03](03-interfaz.md) |
 | `python/models.py` | `Node`, `Edge`, `GraphTab`, `AppState` | [02](02-modelo-de-datos.md) |
 | `python/geometry.py` | coordenadas, curvas de aristas, color por valor | [03](03-interfaz.md) |
-| `python/topologias.py` | «Topologías…»: un generador de networkx → el JSON del editor | [03](03-interfaz.md#topologías-ya-armadas) |
+| `python/topologias.py` | «Topologías…»: el catálogo `TOPOLOGIAS` (networkx) y su paso al JSON del editor | [03](03-interfaz.md#topologías-ya-armadas) |
 | `python/simulation/` | el motor | [MOTOR](MOTOR.md) |
 | `notebooks/pruebas.ipynb` | el notebook del original, usando el motor de la app; corre con Jupyter de escritorio | [MOTOR](MOTOR.md) |
 | `scripts/serve.py` | servidor local con los MIME correctos | [00](00-empezar-aqui.md) |
@@ -53,6 +53,7 @@ flowchart TB
 | Quiero… | Toco | Verifico con |
 |---|---|---|
 | agregar un algoritmo | solo `python/simulation/algoritmos.py` ([MOTOR](MOTOR.md#agregar-un-algoritmo)) | `smoke_ui.py`; para cubrirlo en el arnés, agregarlo a su tupla `ALGORITMOS` y regrabar |
+| agregar una topología ya armada | solo `python/topologias.py`: una entrada en `TOPOLOGIAS` ([03](03-interfaz.md#topologías-ya-armadas)) | `python3 python/topologias.py` y el diálogo en el navegador |
 | probar un algoritmo sin tocar el repo | nada: «Algoritmo propio…» en el selector | la caja muestra el error con su línea |
 | la matemática de una ronda o del sweep | `ronda.py` / `barrido.py`, marcando `# Cambio respecto a api.py` y anotándolo en [MOTOR](MOTOR.md) | `equivalencia.py` antes y después; si falla, es un hallazgo, no se regraba |
 | cómo se dibuja algo | `render_canvas`, `render_minimap`, `render_chart` en `app.py`, o `geometry.py` | `smoke_ui.py` y el navegador |

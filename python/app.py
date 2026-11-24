@@ -53,6 +53,9 @@ COPY_RESET = None
 TRACE_PEDIDO = 0
 TRACE: dict[str, Any] | None = None
 CHART_MAX_Y = 1.0
+#: Diálogo «Topologías…»: la elegida (None mientras se ve la lista de botones) y lo
+#: escrito en sus campos, como texto: `topologias.leer_parametros` lo valida.
+TOPOLOGY: dict[str, Any] = {"clave": None, "valores": {}}
 
 
 # La ranura del algoritmo propio sale en el selector junto a los de casa, pero
@@ -1716,29 +1719,126 @@ def finish_import(text: str, filename: str) -> None:
         notify(f"Error al leer el archivo JSON: {error}")
 
 
-def load_topology(expresion: str) -> bool:
-    """Lo que corre al aceptar el diálogo: la gráfica entra como un JSON importado."""
-    try:
-        from topologias import generar  # aquí y no arriba: importar networkx tarda y no siempre se usa
-
-        datos = generar(expresion)
-    except Exception as error:
-        dialog_error(f"No se pudo generar: {error}")
-        return False
-    finish_import(json.dumps(datos), expresion.strip())
-    fit_view()
-    return True
-
-
 def open_topology_dialog(*_args) -> None:
-    open_dialog(
-        "Cargar topología",
-        "Escribe un generador de networkx. Por ejemplo: cycle_graph(6), star_graph(5), "
-        "grid_2d_graph(3, 3), complete_graph(4, create_using=DiGraph), "
-        "erdos_renyi_graph(10, 0.3, seed=1).",
-        load_topology,
-        initial="cycle_graph(6)",
+    select_topology(None)
+    set_hidden("topology-dialog", False)
+    by_id("topology-cancel").focus()
+
+
+def close_topology_dialog(*_args) -> None:
+    set_hidden("topology-dialog", True)
+
+
+def select_topology(clave: str | None) -> None:
+    """Pasa de la lista de botones (``None``) a los parámetros de una topología.
+
+    Botones y campos salen de ``TOPOLOGIAS``. Los campos se generan aquí, una vez
+    por topología, y no en cada tecla: regenerarlos le quitaría el foco al que se
+    está escribiendo.
+    """
+    import topologias  # aquí y no arriba: importar networkx tarda y no siempre se usa
+
+    TOPOLOGY["clave"], TOPOLOGY["valores"] = clave, {}
+    set_hidden("topology-list", clave is not None)
+    for element_id in ("topology-detail", "topology-back", "topology-accept"):
+        set_hidden(element_id, clave is None)
+    if clave is None:
+        set_text("topology-title", "Topologías")
+        by_id("topology-list").innerHTML = "".join(
+            f'<button class="quiet-btn" type="button" data-topologia="{html.escape(otra)}">'
+            f'{html.escape(entrada["nombre"])}</button>'
+            for otra, entrada in topologias.TOPOLOGIAS.items()
+        )
+        return
+    entrada = topologias.TOPOLOGIAS[clave]
+    set_text("topology-title", entrada["nombre"])
+    set_text("topology-description", entrada["descripcion"])
+    by_id("topology-params").innerHTML = "".join(
+        f'<label class="field-label" for="topology-param-{nombre}">{html.escape(etiqueta)}</label>'
+        f'<input id="topology-param-{nombre}" class="agreed-input" type="number" data-param="{nombre}" '
+        f'value="{omision}" min="{minimo}" max="{maximo}" step="{1 if isinstance(omision, int) else 0.05}" />'
+        for nombre, (etiqueta, omision, minimo, maximo) in entrada["parametros"].items()
     )
+    render_topology_preview()
+    primero = by_id(f"topology-param-{next(iter(entrada['parametros']))}")
+    primero.focus()
+    primero.select()
+
+
+def topology_svg(datos: dict[str, Any]) -> str:
+    """La imagen de referencia: la misma gráfica que se va a cargar, en chico."""
+    centros = {nodo["id"]: (nodo["position"]["x"], nodo["position"]["y"]) for nodo in datos["nodes"]}
+    xs, ys = zip(*centros.values())
+    ancho, alto = max(xs) - min(xs), max(ys) - min(ys)
+    # En una gráfica grande el nodo a escala no se vería: se le da un mínimo.
+    radio = max(30.0, max(ancho, alto) * 0.012)
+    margen = radio + 20
+    lineas = "".join(
+        '<line x1="{:.1f}" y1="{:.1f}" x2="{:.1f}" y2="{:.1f}"></line>'.format(
+            *centros[arista["source"]], *centros[arista["target"]]
+        )
+        for arista in datos["edges"]
+    )
+    circulos = "".join(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{radio:.1f}"></circle>' for x, y in centros.values())
+    return (
+        f'<svg viewBox="{min(xs) - margen:.1f} {min(ys) - margen:.1f} {ancho + 2 * margen:.1f} '
+        f'{alto + 2 * margen:.1f}" role="img" aria-label="Vista previa de la topología">{lineas}{circulos}</svg>'
+    )
+
+
+def render_topology_preview() -> dict[str, Any] | None:
+    """Dibuja la topología elegida con lo escrito en los campos, o dice por qué no se puede.
+
+    Devuelve el JSON de la gráfica, que es justo lo que «Cargar» importa.
+    """
+    import topologias
+
+    try:
+        datos, mensaje = topologias.generar(TOPOLOGY["clave"], TOPOLOGY["valores"]), ""
+    except Exception as error:
+        datos, mensaje = None, str(error)
+    set_text("topology-error", mensaje)
+    set_hidden("topology-error", datos is not None)
+    by_id("topology-accept").disabled = datos is None
+    by_id("topology-preview").innerHTML = topology_svg(datos) if datos else ""
+    set_text("topology-count", f'{len(datos["nodes"])} nodos · {len(datos["edges"])} aristas' if datos else "")
+    return datos
+
+
+def accept_topology(*_args) -> None:
+    import topologias
+
+    datos = render_topology_preview()
+    if datos is None:
+        return
+    clave = TOPOLOGY["clave"]
+    valores = topologias.leer_parametros(clave, TOPOLOGY["valores"]).values()
+    close_topology_dialog()
+    # Entra igual que un archivo importado: pestaña nueva con ese nombre.
+    finish_import(json.dumps(datos), f'{topologias.TOPOLOGIAS[clave]["nombre"]} ({", ".join(map(str, valores))})')
+    fit_view()
+
+
+def on_topology_list_click(event) -> None:
+    boton = event.target.closest("[data-topologia]")
+    if boton:
+        select_topology(str(boton.getAttribute("data-topologia")))
+
+
+def on_topology_input(event) -> None:
+    """Delegado en el contenedor, como `on_param_change`: los campos se regeneran."""
+    nombre = event.target.getAttribute("data-param") if event.target else None
+    if nombre:
+        TOPOLOGY["valores"][str(nombre)] = str(event.target.value)
+        render_topology_preview()
+
+
+def on_topology_keydown(event) -> None:
+    if event.key == "Escape":
+        close_topology_dialog()
+    elif event.key == "Enter" and str(event.target.tagName).lower() == "input":
+        event.preventDefault()
+        accept_topology()
 
 
 def on_file_change(event) -> None:
@@ -2332,6 +2432,12 @@ def bind_events() -> None:
     listen(by_id("import-btn"), "click", import_json_click)
     listen(by_id("file-input"), "change", on_file_change)
     listen(by_id("topology-btn"), "click", open_topology_dialog)
+    listen(by_id("topology-list"), "click", on_topology_list_click)
+    listen(by_id("topology-params"), "input", on_topology_input)
+    listen(by_id("topology-dialog"), "keydown", on_topology_keydown)
+    listen(by_id("topology-back"), "click", lambda _event: select_topology(None))
+    listen(by_id("topology-cancel"), "click", close_topology_dialog)
+    listen(by_id("topology-accept"), "click", accept_topology)
     listen(by_id("export-btn"), "click", export_json)
     listen(by_id("clear-btn"), "click", clear_graph)
     listen(by_id("algorithm-select"), "change", on_algorithm_change)

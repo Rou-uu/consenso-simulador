@@ -1065,24 +1065,64 @@ comprobar(teorica_cafe != app.theory_color("fv") and svg_cafe != app.chart_svg_s
 app.toggle_theme()
 comprobar(app.STATE.theme == "cafe", "tema: un segundo clic vuelve al café")
 
-# --- Cargar topología ----------------------------------------------------
-print("\nCargar topología: un generador de networkx entra como pestaña nueva")
+# --- Topologías ----------------------------------------------------------
+print("\nTopologías: botones, parámetros, imagen y carga en una pestaña nueva")
 import runpy  # noqa: E402
 
-# La conversión (matriz idéntica a la de networkx, nodos sin encimar) se comprueba sola.
-runpy.run_path(str(PROJECT_ROOT / "python" / "topologias.py"), run_name="__main__")
+# El catálogo (matriz idéntica a la de networkx, nodos sin encimar, límites) se comprueba solo.
+TOPOLOGIAS = runpy.run_path(str(PROJECT_ROOT / "python" / "topologias.py"), run_name="__main__")["TOPOLOGIAS"]
+
+
+def de_topologia(element_id: str) -> FakeElement:
+    return DOCUMENTO.getElementById(f"topology-{element_id}")
+
+
+def escribir_parametro(nombre: str, valor: str) -> None:
+    campo = FakeElement(f"topology-param-{nombre}")
+    campo.setAttribute("data-param", nombre)
+    campo.value = valor
+    app.on_topology_input(types.SimpleNamespace(target=campo))
+
+
+app.open_topology_dialog()
+comprobar(
+    re.findall(r'data-topologia="([^"]+)"', de_topologia("list").innerHTML) == list(TOPOLOGIAS)
+    and not de_topologia("list").hidden and de_topologia("detail").hidden and de_topologia("accept").hidden,
+    "al abrir hay un botón por topología y todavía no se puede cargar",
+)
+app.select_topology("malla")
+comprobar(
+    de_topologia("list").hidden and not de_topologia("detail").hidden
+    and de_topologia("title").textContent == "Malla"
+    and de_topologia("description").textContent == TOPOLOGIAS["malla"]["descripcion"]
+    and re.findall(r'data-param="([^"]+)"', de_topologia("params").innerHTML) == ["filas", "columnas"],
+    "elegir una muestra su descripción y un campo por parámetro",
+)
+comprobar(
+    de_topologia("preview").innerHTML.count("<circle") == 12 and de_topologia("preview").innerHTML.count("<line") == 17
+    and de_topologia("count").textContent == "12 nodos · 17 aristas",
+    "la imagen dibuja la malla por omisión (3 × 4)",
+)
+escribir_parametro("filas", "2")
+comprobar(de_topologia("preview").innerHTML.count("<circle") == 8, "cambiar un parámetro redibuja la imagen")
+escribir_parametro("columnas", "99")
 pestanas = len(app.STATE.tabs)
+app.accept_topology()
 comprobar(
-    app.load_topology(" cycle_graph(6) ") and len(app.STATE.tabs) == pestanas + 1
-    and app.STATE.tab.name == "cycle_graph(6)" and not app.STATE.tab.directed
-    and len(app.STATE.tab.nodes) == len(app.STATE.tab.edges) == 6,
-    "cycle_graph(6) abre una pestaña no dirigida con 6 nodos y 6 aristas",
+    "Columnas" in de_topologia("error").textContent and not de_topologia("error").hidden
+    and de_topologia("accept").disabled and de_topologia("preview").innerHTML == ""
+    and len(app.STATE.tabs) == pestanas and not de_topologia("dialog").hidden,
+    "un valor fuera de límites se explica y no deja cargar",
 )
+escribir_parametro("columnas", "5")
+app.accept_topology()
 comprobar(
-    not app.load_topology("no_existe(3)") and len(app.STATE.tabs) == pestanas + 1
-    and "No se pudo generar" in DOCUMENTO.getElementById("app-dialog-message").textContent,
-    "una expresión inválida no abre pestaña y el diálogo dice por qué",
+    len(app.STATE.tabs) == pestanas + 1 and app.STATE.tab.name == "Malla (2, 5)" and not app.STATE.tab.directed
+    and len(app.STATE.tab.nodes) == 10 and len(app.STATE.tab.edges) == 13 and de_topologia("dialog").hidden,
+    "«Cargar» abre la malla 2 × 5 en una pestaña nueva y cierra el diálogo",
 )
+app.select_topology("ciclo")
+comprobar(de_topologia("preview").innerHTML.count("<circle") == 6, "otra topología empieza con sus valores por omisión")
 
 print()
 if FALLAS:

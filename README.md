@@ -84,8 +84,9 @@ algoritmos de simulación pertenecen a los módulos Python.
 - Usa espacio + arrastre para desplazar el canvas, la rueda para zoom y los
   controles inferiores para zoom/ajuste.
 - Importar abre el JSON en una pestaña nueva; exportar descarga `graph.json`.
-- «Topologías…» abre una gráfica ya armada a partir de un generador de
-  networkx, por ejemplo `cycle_graph(6)` o `grid_2d_graph(3, 3)`.
+- «Topologías…» ofrece gráficas ya armadas (ciclo, malla, estrella, árbol,
+  aleatoria…): eliges una, ajustas sus parámetros viendo la imagen y se abre en
+  una pestaña nueva.
 
 ## Fidelidad y diferencias conocidas
 

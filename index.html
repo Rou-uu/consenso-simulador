@@ -344,6 +344,31 @@ ALGORITMO = {"nombre": "Promedio de lo recibido", "ronda": promedio}
           </div>
         </section>
       </div>
+
+      <!-- «Topologías…». Botones, campos e imagen los genera app.py desde TOPOLOGIAS
+           (python/topologias.py). Agregar una topología no toca este archivo. -->
+      <div id="topology-dialog" class="app-dialog-backdrop" hidden>
+        <section class="app-dialog topology-dialog" role="dialog" aria-modal="true" aria-labelledby="topology-title">
+          <h2 id="topology-title">Topologías</h2>
+          <div id="topology-list" class="topology-list"></div>
+          <div id="topology-detail" hidden>
+            <p id="topology-description"></p>
+            <div class="topology-detail">
+              <figure class="topology-figure">
+                <div id="topology-preview" class="topology-preview"></div>
+                <figcaption id="topology-count"></figcaption>
+              </figure>
+              <div id="topology-params" class="agreed-input-wrapper"></div>
+            </div>
+            <p id="topology-error" class="error" role="alert" hidden></p>
+          </div>
+          <div class="app-dialog-actions">
+            <button id="topology-back" class="quiet-btn" type="button" hidden>← Topologías</button>
+            <button id="topology-cancel" class="secondary-btn" type="button">Cancelar</button>
+            <button id="topology-accept" class="simulate-btn" type="button" hidden>Cargar</button>
+          </div>
+        </section>
+      </div>
     </main>
 
     <script type="module" src="./js/bootstrap.js"></script>

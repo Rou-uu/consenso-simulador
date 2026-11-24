@@ -87,21 +87,28 @@ Los editores usan el diálogo propio `#app-dialog` (`open_dialog`), no `prompt`.
 
 ## Topologías ya armadas
 
-«Topologías…» pide un generador de networkx (`cycle_graph(6)`,
-`grid_2d_graph(3, 3)`, `complete_graph(4, create_using=DiGraph)`,
-`erdos_renyi_graph(10, 0.3, seed=1)`…) y abre la gráfica en una pestaña nueva.
+«Topologías…» abre el diálogo `#topology-dialog`: un botón por topología; al
+elegir una se ven su descripción, sus parámetros y una imagen de referencia, y
+«Cargar» la abre en una pestaña nueva.
 
-- networkx lo baja `bootstrap.js` en el arranque, junto con NumPy. Se importa
-  hasta la primera topología, por eso esa tarda un poco más.
-- `load_topology` llama a `topologias.generar`, que evalúa la expresión con los
-  nombres de networkx a la vista y devuelve el JSON del contrato; entra por
-  `finish_import`, igual que un archivo importado.
-- Las posiciones salen de `spring_layout`; si deja nodos encimados (gráficas
-  densas), de `circular_layout`. Todos los valores entran en 0 y los pesos en 1,
-  salvo que la gráfica traiga `weight`.
-- Límite: `MAX_NODOS` (200). `topologias.py` no importa `js`: su
-  autocomprobación corre con `python3 python/topologias.py` y `smoke_ui.py` la
-  incluye.
+- Todo sale de `TOPOLOGIAS` (`python/topologias.py`), igual que el selector de
+  algoritmos sale de `ALGORITMOS`. **Agregar una topología es agregar una
+  entrada**: nombre, descripción, parámetros con sus límites, la función de
+  networkx y, si se quiere, su acomodo. No se toca `app.py` ni `index.html`.
+- La imagen no es un archivo: `topology_svg` dibuja la misma gráfica que se va a
+  cargar, así que cambia al escribir en los campos (`on_topology_input` →
+  `render_topology_preview`).
+- Un valor fuera de sus límites, o una gráfica de más de `MAX_NODOS` (200), se
+  explica bajo la imagen y apaga «Cargar». Los límites se validan en
+  `topologias.leer_parametros`; los `min`/`max` de los campos son solo ayuda.
+- La gráfica entra por `finish_import`, igual que un archivo importado. Todos los
+  valores entran en 0 y los pesos en 1.
+- Posiciones: el acomodo de la entrada; si no tiene o deja nodos encimados,
+  `spring_layout`, y al final `circular_layout`.
+- networkx lo baja `bootstrap.js` en el arranque, junto con NumPy, pero se
+  importa hasta abrir el diálogo: por eso la primera vez tarda un poco más.
+- `topologias.py` no importa `js`: su autocomprobación corre con
+  `python3 python/topologias.py` y `smoke_ui.py` la incluye.
 
 ## Simular
 

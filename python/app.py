@@ -471,14 +471,14 @@ def render_tabs() -> None:
 
 def edge_style(edge: Edge) -> tuple[str, float, str]:
     if edge.highlight == "updated":
-        return "#F4B45C", 4, "edge-animated"
+        return "#E8871E", 4, "edge-animated"
     if edge.highlight == "delivered":
-        return "#7A6E9E", 4, "edge-animated"
+        return "#5B6577", 4, "edge-animated"
     if edge.highlight == "quiet":
-        return "#413A5E", 1, ""
+        return "#D5DAE3", 1, ""
     if edge.id == STATE.selected_edge_id:
-        return "#6E7CF2", 4, ""
-    return "#6C6690", 3, ""
+        return "#2F5BD8", 4, ""
+    return "#8A93A3", 3, ""
 
 
 def render_canvas() -> None:
@@ -528,9 +528,9 @@ def render_canvas() -> None:
         fill, text_color = value_color(node.value)
         selected = " selected" if node.id == STATE.selected_node_id else ""
         figura = (
-            f'<rect class="node-circle" x="3" y="3" width="54" height="54" rx="6" fill="{fill}" stroke="#100E1A" stroke-width="3"></rect>'
+            f'<rect class="node-circle" x="3" y="3" width="54" height="54" rx="6" fill="{fill}" stroke="#FFFFFF" stroke-width="3"></rect>'
             if node.id == lider else
-            f'<circle class="node-circle" cx="30" cy="30" r="30" fill="{fill}" stroke="#100E1A" stroke-width="3"></circle>'
+            f'<circle class="node-circle" cx="30" cy="30" r="30" fill="{fill}" stroke="#FFFFFF" stroke-width="3"></circle>'
         )
         node_parts.append(
             f'<g class="graph-node{selected}" data-node-id="{html.escape(node.id)}" '
@@ -697,10 +697,11 @@ def curve_color(clave: str) -> str:
 
 
 def theory_color(clave: str) -> str:
-    """El color del algoritmo aclarado: la teórica va punteada encima de su media
-    simulada, y con el mismo color no se distinguiría."""
+    """El color del algoritmo oscurecido: la teórica va punteada encima de su media
+    simulada, y con el mismo color no se distinguiría. Sobre fondo claro se oscurece;
+    aclarado se perdería contra el papel."""
     color = curve_color(clave)
-    return "#" + "".join(f"{(int(color[i:i + 2], 16) + 2 * 255) // 3:02x}" for i in (1, 3, 5))
+    return "#" + "".join(f"{int(color[i:i + 2], 16) * 3 // 5:02x}" for i in (1, 3, 5))
 
 
 def curve_visible(curva: str) -> bool:
@@ -885,15 +886,15 @@ def on_chart_pointer_move(event) -> None:
 #: El estilo de la gráfica con colores literales: el SVG descargado no ve app.css.
 CHART_SVG_STYLE = (
     "<style>"
-    ".chart-grid line{stroke:#372f52;stroke-dasharray:3 3}"
-    ".chart-axis{stroke:#9a90b4;stroke-width:1}"
-    ".chart-axis-labels text{fill:#9a90b4;font:11px ui-monospace,Menlo,Consolas,monospace}"
-    ".chart-axis-labels .chart-axis-title{fill:#6e6690;font-size:12px}"
-    ".chart-confidence-band{fill:#6e7cf2;fill-opacity:.18;stroke:none}"
-    ".chart-mean-line{fill:none;stroke:#f4b45c;stroke-width:2.5}"
-    ".chart-theory-line{fill:none;stroke:#7fd6c2;stroke-width:1.5;stroke-dasharray:6 5}"
+    ".chart-grid line{stroke:#d5dae3}"
+    ".chart-axis{stroke:#14213d;stroke-width:1}"
+    ".chart-axis-labels text{fill:#5b6577;font:13px 'STIX Two Text',Georgia,'Times New Roman',serif}"
+    ".chart-axis-labels .chart-axis-title{fill:#14213d;font-size:14px}"
+    ".chart-confidence-band{fill:#2f5bd8;fill-opacity:.18;stroke:none}"
+    ".chart-mean-line{fill:none;stroke:#e8871e;stroke-width:2.5}"
+    ".chart-theory-line{fill:none;stroke:#5b6577;stroke-width:1.5;stroke-dasharray:6 5}"
     "</style>"
-    '<rect width="100%" height="100%" fill="#1f1b30"/>'
+    '<rect width="100%" height="100%" fill="#ffffff"/>'
 )
 
 

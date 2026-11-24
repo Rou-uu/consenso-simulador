@@ -147,7 +147,7 @@ algoritmo.
 
 Cada algoritmo tiene su color (`curve_color`, por su lugar en el registro: no
 cambia según cuáles estén palomeados); su teórica va punteada y en el mismo
-color aclarado (`theory_color`). El color va en `style`, no como atributo, para
+color oscurecido (`theory_color`). El color va en `style`, no como atributo, para
 que el CSS de la clase no lo pise. `#chart-toggles` es la leyenda y a la vez las
 casillas de «qué se muestra»: una por curva más la del IC. Lo despalomeado queda
 en `STATE.hidden_curves` (`"fv:sim"`, `"fv:teo"`, `"ic"`) y no cuenta para la
@@ -232,5 +232,4 @@ navegador (Blob + enlace), y también lo usa «Exportar JSON» del editor.
 
 ## Deuda visible
 
-Está en [09](09-invariantes-y-deuda.md#deuda-conocida). La más notoria: el color
-de las aristas tras simular no se ve; solo se ve la animación.
+Está en [09](09-invariantes-y-deuda.md#deuda-conocida).

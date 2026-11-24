@@ -41,12 +41,7 @@ Cosas que están mal y se saben. Antes de arreglarlas, lee la causa.
 
 | Síntoma | Causa | ¿Seguro arreglarlo? |
 |---|---|---|
-| Tras simular, todas las aristas se ven del mismo color; solo cambia la animación | `render_canvas` escribe `stroke` como atributo de presentación y el CSS de `.edge-path` lo pisa; las reglas `.is-updated`, `.is-delivered`, etc. de `app.css` nunca se aplican | sí; arreglar las dos cosas a la vez |
-| Seleccionar un nodo o arista no se ve, pero Delete lo borra | falta el estilo de la selección | sí, y es urgente: se borra a ciegas |
-| Un error del sweep se ve igual que el progreso | `.sweep-error` no tiene regla en `app.css` | sí |
-| Un arranque fallido se ve igual que uno lento | no hay regla para `[data-state="error"]` | sí |
-| Al conectar con Shift no se ve la línea | falta la regla `.connection-line` | sí |
-| El minimapa no dibuja aristas | sus `<line>` no tienen `stroke` | sí |
+| Seleccionar un nodo o arista con un clic no se ve hasta el siguiente redibujado, pero Delete lo borra | `on_canvas_pointer_down` cambia la selección sin llamar a `render_canvas`; el estilo ya existe (`.graph-node.selected` y el color de `edge_style`) | sí, y es urgente: se borra a ciegas. Ojo con redibujar en `pointerdown`: reemplaza el elemento bajo el puntero |
 | La ayuda promete «snap a múltiplos de 10» con Shift, y no existe | el original lo tiene (commit `72768fe` de `../Simulador`) y no se portó; aquí Shift sobre un nodo conecta | sí: portarlo del original |
 | Con aristas paralelas, ambas se marcan igual | `get_adj` colapsa el par en una celda y `apply_propagation` empareja por par de nodos | no sin cambiar el contrato de `propagation` |
 | En un grafo no dirigido solo se resalta una dirección | `apply_propagation` busca el par en el orden en que se dibujó la arista | sí, pero primero hay que decidir qué debe verse |

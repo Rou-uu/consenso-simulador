@@ -40,6 +40,7 @@ Python y los Web Workers necesitan un origen HTTP.
 consenso-simulador/
 ├── index.html                 # Estructura de la interfaz y overlay de arranque
 ├── css/                       # Estilos y fidelidad visual
+├── fonts/                     # Tipografías autoalojadas (OFL), las carga app.css
 ├── js/
 │   └── bootstrap.js           # Único cargador del runtime principal
 ├── python/

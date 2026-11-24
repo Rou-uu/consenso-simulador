@@ -33,7 +33,8 @@ flowchart TB
 | Archivo | Qué hace | Doc |
 |---|---|---|
 | `index.html` | los `id` que `app.py` busca; la plantilla del algoritmo propio | [01](01-arranque.md) |
-| `css/app.css` | todo el estilo | [03](03-interfaz.md) |
+| `css/app.css` | todo el estilo; la paleta son las variables de `:root` | [03](03-interfaz.md) |
+| `fonts/` | STIX Two Text y Fira Sans autoalojadas, con su licencia OFL | [03](03-interfaz.md) |
 | `js/bootstrap.js` | arranque: baja Pyodide y NumPy, monta los `.py`, corre `app.py` | [01](01-arranque.md) |
 | `js/sweep-worker.js` | el Worker: rondas, sweep y algoritmo propio | [01](01-arranque.md) |
 | `python/app.py` | estado (`STATE`), eventos, dibujo, mensajes al Worker | [03](03-interfaz.md) |

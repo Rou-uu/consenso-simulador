@@ -42,6 +42,14 @@ TOPOLOGIAS = {
         "grafo": lambda n: nx.cycle_graph(n),
         "acomodo": nx.circular_layout,
     },
+    "ciclo_dirigido": {
+        "nombre": "Ciclo dirigido",
+        "descripcion": "El ciclo con dos arcos por arista, a→b y b→a: cada sentido pierde su "
+                       "mensaje por separado. Es el modelo de la cota por validez, que aquí es exacta.",
+        "parametros": {"n": ("Nodos", 6, 3, MAX_NODOS)},
+        "grafo": lambda n: nx.cycle_graph(n).to_directed(),
+        "acomodo": nx.circular_layout,
+    },
     "camino": {
         "nombre": "Camino",
         "descripcion": "Una fila de nodos: los extremos tienen un vecino y los demás, dos. "

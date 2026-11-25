@@ -19,7 +19,7 @@ archivos tal cual y el navegador hace todo lo demás.
 4. El overlay se oculta. Si algo falla, queda en `data-state="error"` con el
    mensaje en `#loader-detail`.
 
-`PYTHON_FILES` monta 7 archivos: `app.py`, `models.py`, `geometry.py`,
+`PYTHON_FILES` monta 8 archivos: `app.py`, `models.py`, `geometry.py`, `pdf.py`,
 `topologias.py` (que no se importa hasta que se pide una topología, porque
 importar networkx tarda y no siempre se usa) y, del
 motor, solo `__init__.py`, `algoritmos.py` y `usuario.py`. El hilo principal no

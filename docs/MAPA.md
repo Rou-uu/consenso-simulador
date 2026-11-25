@@ -40,6 +40,7 @@ flowchart TB
 | `python/app.py` | estado (`STATE`), eventos, dibujo, mensajes al Worker | [03](03-interfaz.md) |
 | `python/models.py` | `Node`, `Edge`, `GraphTab`, `AppState` | [02](02-modelo-de-datos.md) |
 | `python/geometry.py` | coordenadas, curvas de aristas, color por valor | [03](03-interfaz.md) |
+| `python/pdf.py` | la gráfica del sweep en PDF: traduce el SVG de `chart_svg` | [03](03-interfaz.md) |
 | `python/topologias.py` | «Topologías…»: el catálogo `TOPOLOGIAS` (networkx) y su paso al JSON del editor | [03](03-interfaz.md#topologías-ya-armadas) |
 | `python/simulation/` | el motor | [MOTOR](MOTOR.md) |
 | `notebooks/pruebas.ipynb` | el notebook del original, usando el motor de la app; corre con Jupyter de escritorio | [MOTOR](MOTOR.md) |

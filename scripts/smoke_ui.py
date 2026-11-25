@@ -720,6 +720,19 @@ arbol = ET.fromstring(app.chart_svg(markup).split("\n", 1)[1])
 comprobar(arbol.tag == "{http://www.w3.org/2000/svg}svg", "SVG: XML válido y con su namespace")
 comprobar(arbol[0].tag.endswith("style") and arbol[1].tag.endswith("rect"), "SVG: trae su estilo y su fondo")
 comprobar((arbol.get("width"), arbol.get("height")) == ("800", "440"), "SVG: declara su tamaño")
+grafica = ('<svg id="sweep-chart-svg" viewBox="0 0 800 440"><g class="chart-grid"><line x1="56" y1="24" x2="776" y2="24"></line></g>'
+           '<path class="chart-confidence-band" style="fill:#4e79a7" d="M 56,300 L 776,100 L 776,200 L 56,392 Z"></path>'
+           '<path class="chart-theory-line" style="stroke:#ffffff" d="M 56,350 L 776,150"></path>'
+           '<g class="chart-axis-labels"><text class="chart-axis-title" x="14" y="208" text-anchor="middle" '
+           'transform="rotate(-90 14 208)">discrepancia (máx − mín)</text></g></svg>')
+pdf = app.svg_a_pdf(app.chart_svg(grafica))
+inicio = int(pdf.rsplit("startxref\n", 1)[1].split()[0])
+offsets = [int(linea[:10]) for linea in pdf[inicio:].split("\n")[3:8]]
+comprobar(pdf.startswith("%PDF-") and pdf.isascii() and pdf[inicio:].startswith("xref")
+          and all(pdf[o:].startswith(f"{i} 0 obj") for i, o in enumerate(offsets, 1)),
+          "PDF: ASCII, con su tabla xref apuntando a cada objeto")
+comprobar("/GS0 gs" in pdf and "[6 5] 0 d" in pdf and "0.0000 -1.0000 -1.0000 0.0000" in pdf and "\\341" in pdf,
+          "PDF: banda translúcida, teórica punteada, título girado y acentos en WinAnsi")
 app.STATE.algorithm = "fv"
 app.STATE.sweep_algorithms = ["fv"]
 campo_semilla.value = ""

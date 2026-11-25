@@ -272,6 +272,7 @@ describiendo la corrida que se ve.
 | CSV | `experiment_csv` | `p,media,ic_bajo,ic_alto,simulaciones`, una fila por p |
 | JSON | `experiment_json` | todo lo necesario para repetirlo (la red en el formato de importación) y la curva; `completo` es falso si se detuvo |
 | SVG | `chart_svg` | la gráfica tal como se ve (todas las curvas a la vista, **sin leyenda**), en el tema a la vista, con su estilo en `chart_svg_style()` porque fuera de la página no hay `app.css` |
+| PDF | `pdf.svg_a_pdf` | ese mismo SVG traducido a PDF vectorial, sin dependencias: líneas, trazos M/L/Z, textos en Times-Roman (no se incrusta fuente) y el fondo. Lee el estilo del `<style>` del SVG, así que no repite colores. No es un conversor general: un elemento nuevo en la gráfica (otra forma, `tspan`, curvas Bézier) hay que agregarlo ahí |
 
 El CSV y el JSON son del experimento en detalle: uno por algoritmo, con el mismo
 formato que antes de haber varios.

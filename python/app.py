@@ -18,6 +18,7 @@ from pyodide.ffi import create_proxy, to_js
 
 from geometry import edge_geometry, fit_transform, has_reverse, node_center, value_color
 from models import AppState, Edge, GraphTab, Node, SimulationState
+from pdf import svg_a_pdf
 from simulation import algoritmos as modulo_algoritmos
 from simulation.algoritmos import ALGORITMOS
 from simulation.usuario import CLAVE as CLAVE_USUARIO
@@ -1033,7 +1034,7 @@ def chart_svg(markup: str) -> str:
 
 def render_downloads() -> None:
     vacio = STATE.experiment is None or not STATE.experiment["puntos"]
-    for element_id in ("download-csv-btn", "download-json-btn", "download-svg-btn"):
+    for element_id in ("download-csv-btn", "download-json-btn", "download-svg-btn", "download-pdf-btn"):
         by_id(element_id).disabled = vacio
 
 
@@ -1049,7 +1050,11 @@ def download_experiment(formato: str) -> None:
     else:
         # La gráfica trae todas las curvas, no solo la del experimento en detalle.
         nombre = experiment_basename(experiment, "-".join(clave for clave, _ in chart_series()))
-        download(f"{nombre}.svg", chart_svg(str(by_id("sweep-chart-svg").outerHTML)), "image/svg+xml")
+        svg = chart_svg(str(by_id("sweep-chart-svg").outerHTML))
+        if formato == "pdf":
+            download(f"{nombre}.pdf", svg_a_pdf(svg), "application/pdf")
+        else:
+            download(f"{nombre}.svg", svg, "image/svg+xml")
 
 
 def hide_chart_tooltip(*_args) -> None:
@@ -2497,6 +2502,7 @@ def bind_events() -> None:
     listen(by_id("download-csv-btn"), "click", lambda _event: download_experiment("csv"))
     listen(by_id("download-json-btn"), "click", lambda _event: download_experiment("json"))
     listen(by_id("download-svg-btn"), "click", lambda _event: download_experiment("svg"))
+    listen(by_id("download-pdf-btn"), "click", lambda _event: download_experiment("pdf"))
     listen(by_id("sweep-chart-svg"), "pointermove", on_chart_pointer_move)
     listen(by_id("sweep-chart-svg"), "pointerleave", hide_chart_tooltip)
     listen(by_id("app-dialog-cancel"), "click", close_dialog)

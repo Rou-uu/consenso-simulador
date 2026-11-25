@@ -5,6 +5,7 @@ const PYTHON_FILES = [
   "python/app.py",
   "python/models.py",
   "python/geometry.py",
+  "python/pdf.py",
   "python/topologias.py",
   "python/simulation/__init__.py",
   "python/simulation/algoritmos.py",

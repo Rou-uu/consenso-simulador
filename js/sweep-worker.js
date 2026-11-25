@@ -155,7 +155,7 @@ import numpy as np
 from js import Object, postMessage
 from pyodide.ffi import to_js
 from simulation.barrido import iter_sweep
-from simulation.teoria import curva_exacta
+from simulation.teoria import cota_validez, curva_exacta
 
 _params = json.loads(_sweep_params_json)
 # La curva exacta no usa azar, así que no altera la corrida.
@@ -168,7 +168,13 @@ try:
     )
 except Exception as _error:
     _teorica, _motivo = None, f"no se pudo calcular: {_error}"
-postMessage(to_js({"type": "teorica", "valores": _teorica, "motivo": _motivo},
+# La cota inferior por validez no depende del algoritmo: solo de la red, la entrada y las rondas.
+try:
+    _cota, _ = cota_validez(_params["graph"], _params.get("rounds", 1),
+                            np.linspace(0, 1, int(_params.get("numPPoints", 201))))
+except Exception:
+    _cota = None
+postMessage(to_js({"type": "teorica", "valores": _teorica, "motivo": _motivo, "cota": _cota},
                   dict_converter=Object.fromEntries))
 # Con semilla, iter_sweep siembra cada bloque (pasada, p) por separado: así toda
 # la corrida es repetible y el desglose puede repetir cualquier simulación.

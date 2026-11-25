@@ -688,6 +688,17 @@ def theory_for(experiment: dict[str, Any] | None) -> list[float] | None:
     return teorica if teorica and len(teorica) == len(experiment["puntos"]) else None
 
 
+def bound_curve() -> tuple[list[dict[str, float]], list[float]] | None:
+    """``(puntos, cota)`` de la cota inferior por validez (teoria.cota_validez), si
+    la red del sweep es un ciclo con entrada 0/1. No depende del algoritmo, así que
+    basta la del primero que la traiga."""
+    for _clave, e in chart_series():
+        cota = e.get("cota")
+        if cota and len(cota) == len(e["puntos"]):
+            return e["puntos"], cota
+    return None
+
+
 #: Un color por algoritmo, en el orden del registro: el color sigue al algoritmo,
 #: no a cuántos estén palomeados. Paleta categórica validada (daltonismo y
 #: contraste) sobre el fondo de la gráfica.
@@ -761,6 +772,9 @@ def render_results() -> None:
         else:
             leyenda.append(f'<span class="legend-item">{nombre}: sin curva teórica '
                            f'({html.escape(e.get("motivo_teorica") or "no disponible")}).</span>')
+    if bound_curve():
+        leyenda.append(casilla("cota", f'<span class="legend-swatch theory" style="--c:{TEMAS[STATE.theme]["tinta"]}"></span>',
+                               "Cota inferior por validez"))
     if leyenda:
         leyenda.append(casilla("ic", '<span class="legend-swatch band"></span>', "IC 95 %"))
     marcado = "".join(leyenda)
@@ -815,6 +829,8 @@ def render_chart() -> None:
             values += [float(p["ciHigh" if con_ic else "mean"]) for p in puntos] + [float(p["mean"]) for p in puntos]
         values += teorica or []
         curvas.append((clave, e["puntos"], puntos is not None, teorica))
+    cota = bound_curve() if curve_visible("cota") else None
+    values += cota[1] if cota else []
     max_y, divisions = nice_axis(max(values)) if values else (1.0, 4)
     CHART_MAX_Y = max_y
     render_chart_axis(max_y, divisions, top, bottom)
@@ -846,6 +862,9 @@ def render_chart() -> None:
         if teorica:
             teoricas.append(f'<path class="chart-theory-line" style="stroke:{theory_color(clave)}" '
                             f'd="{trazo(puntos, teorica)}"></path>')
+    if cota:
+        teoricas.append(f'<path class="chart-theory-line chart-bound-line" style="stroke:{TEMAS[STATE.theme]["tinta"]}" '
+                        f'd="{trazo(*cota)}"></path>')
     by_id("chart-curves").innerHTML = "".join(bandas + medias + teoricas)
 
 
@@ -876,6 +895,9 @@ def on_chart_pointer_move(event) -> None:
         if partes:
             lineas.append(f'<span class="legend-swatch" style="--c:{curve_color(clave)}"></span> '
                           f'{html.escape(e["nombre"])}: ' + " · ".join(partes))
+    cota = bound_curve()
+    if cota and curve_visible("cota") and i < len(cota[1]):
+        lineas.append(f"Cota inferior por validez: {cota[1][i]:.4f}")
     tooltip = by_id("chart-tooltip")
     tooltip.innerHTML = "<br>".join(lineas)
     chart_bounds = tooltip.parentElement.getBoundingClientRect()
@@ -2311,6 +2333,7 @@ def start_sweep(*_args) -> None:
             # La manda el Worker antes de la primera iteración (teoria.curva_exacta).
             "teorica": None,
             "motivo_teorica": "calculando…",
+            "cota": None,
             "estado": "cargando motor Python del sweep…",
             "error": False,
         }
@@ -2374,6 +2397,8 @@ def start_sweep_worker(clave: str) -> None:
             valores = message.get("valores")
             experiment["teorica"] = [float(v) for v in valores] if valores else None
             experiment["motivo_teorica"] = str(message.get("motivo") or "")
+            cota = message.get("cota")
+            experiment["cota"] = [float(v) for v in cota] if cota else None
             render_chart()
             render_results()
         elif kind == "end":

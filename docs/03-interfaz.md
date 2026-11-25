@@ -207,6 +207,12 @@ puntos. `render_chart` la dibuja punteada y la incluye en la escala;
 la tabla `#results-table` del experimento en detalle, una fila por p. El CSV y
 el JSON la llevan también.
 
+El mismo mensaje trae `cota`, la cota inferior por validez
+([MOTOR](MOTOR.md#la-cota-inferior-por-validez)), cuando la red es un ciclo con
+entrada 0/1. `bound_curve()` toma la del primer experimento que la tenga y
+`render_chart` la dibuja una sola vez, punteada y en el color de la tinta, con su
+casilla `cota` en la leyenda. No va a la tabla ni a las descargas de datos.
+
 ## Desglose por rondas
 
 Inspecciona **las simulaciones que corrió el sweep**, no corridas nuevas. Dos

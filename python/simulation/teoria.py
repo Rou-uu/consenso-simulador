@@ -15,7 +15,11 @@ Un algoritmo entra si declara cómo se calcula su discrepancia para un patrón:
 ``"determinista": True`` (su ``batch`` no usa azar: basta correrlo sobre todos
 los patrones a la vez) o ``"esperanza"`` (la esperanza sobre su azar interno,
 como FV). Si no, no hay curva: adivinar sería peor que no mostrar nada.
+
+``cota_validez`` es aparte: no depende del algoritmo ni se limita a una ronda.
 """
+
+from math import comb
 
 import numpy as np
 
@@ -73,3 +77,51 @@ def curva_exacta(graph: dict, algorithm: str, params: dict, modo: str, rounds: i
     p = np.asarray(probabilities, dtype=float)
     curva = sum(coef[k] * p**k * (1 - p) ** (m - k) for k in range(m + 1))
     return [float(x) for x in np.broadcast_to(curva, p.shape)], ""
+
+
+def cota_validez(graph: dict, rounds: int, probabilities) -> tuple:
+    """``(valores, "")`` con una cota inferior del desacuerdo en un ciclo, o ``(None, motivo)``.
+
+    Vale para todo algoritmo que solo decide valores que vio (validez), con entradas
+    0 y 1. Se toman el bloque más largo de 0 y el más largo de 1: si a sus centros
+    no les llega el valor contrario por ningún lado, uno decide 0 y el otro 1. La
+    información avanza un brinco por ronda con probabilidad ``p``, así que desde
+    ``d`` brincos no llega con probabilidad ``P(Bin(rounds, p) < d)``, y la cota es
+    el producto de los cuatro lados.
+
+    El producto es la probabilidad exacta de ese evento con un sorteo por arista
+    dirigida. Con sorteos compartidos (red no dirigida, broadcast) los cuatro fallos
+    se favorecen entre sí, así que el producto queda por debajo y sigue siendo cota.
+    """
+    mask = get_adj(graph) > 0
+    n = len(mask)
+    if n < 3 or np.diag(mask).any() or not (mask == mask.T).all() or not (mask.sum(axis=1) == 2).all():
+        return None, "la red no es un ciclo"
+    orden, previo = [0], None
+    while len(orden) <= n:
+        siguiente = next(int(j) for j in np.flatnonzero(mask[orden[-1]]) if j != previo)
+        if siguiente == 0:
+            break
+        previo = orden[-1]
+        orden.append(siguiente)
+    if len(orden) != n:
+        return None, "la red no es un ciclo"
+    valores = [float(v) for v in get_values(graph)[orden]]
+    if set(valores) != {0.0, 1.0}:
+        return None, "la entrada debe tener ceros y unos"
+
+    # Se empieza justo después de un cambio de valor, para no partir un bloque.
+    inicio = next(i for i in range(n) if valores[i] != valores[i - 1])
+    largo = {0.0: 0, 1.0: 0}
+    racha = 0
+    for i in range(n):
+        v = valores[(inicio + i) % n]
+        racha = racha + 1 if i and v == valores[(inicio + i - 1) % n] else 1
+        largo[v] = max(largo[v], racha)
+
+    p = np.asarray(probabilities, dtype=float)
+    cota = np.ones_like(p)
+    for L in largo.values():
+        for d in (L // 2 + 1, (L + 1) // 2):  # distancias del centro del bloque a cada borde
+            cota = cota * sum(comb(rounds, k) * p**k * (1 - p) ** (rounds - k) for k in range(min(d, rounds + 1)))
+    return [float(x) for x in cota], ""

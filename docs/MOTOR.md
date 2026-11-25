@@ -12,7 +12,7 @@ que se pueden leer lado a lado. Este documento dice qué hay en cada archivo y
 | `algoritmos.py` | `fv`, `amp`, `fv_batch`, `amp_batch`, `fv_actualizo`, `cambio_el_valor`, `courteous`, `courteous_batch`, `ciclo`, `ciclo_batch`, `ALGORITMOS`, `buscar` | las funciones del algoritmo; `courteous` y `ciclo` son nuevos |
 | `ronda.py` | `get_adj`, `get_values`, `who_gets_message_por_arista`, `who_gets_message_por_emisor`, `who_gets_message`, `propagacion`, `run_round`, `update_graph_data`, `simulate_graph` | `POST /simulate` |
 | `barrido.py` | `who_gets_message_batch_por_arista`, `who_gets_message_batch_por_emisor`, `who_gets_message_batch`, `round_batch`, `run_one_simulation_naive`, `iter_sweep`, `simulacion_del_sweep` | `POST /simulate/sweep` y `/simulate/sweep/naive` (`simulacion_del_sweep` es nueva) |
-| `teoria.py` | `sorteos`, `curva_exacta` | no existe: es nuevo |
+| `teoria.py` | `sorteos`, `curva_exacta`, `cota_validez` | no existe: es nuevo |
 | `usuario.py` | `instalar` | no existe: es nuevo |
 
 Quién llama a qué:
@@ -171,6 +171,22 @@ No hay curva (y el análisis dice por qué) con más de una ronda, con más de
 `2^14` patrones, con lazos, o si el algoritmo no declara `determinista` ni
 `esperanza`. El Worker la calcula antes de fijar la semilla; no usa azar, así que
 no altera la corrida.
+
+### La cota inferior por validez
+
+`cota_validez` no depende del algoritmo ni se limita a una ronda. Aplica cuando la
+red es un ciclo (cada nodo con dos vecinos, en ambos sentidos) y la entrada tiene
+ceros y unos. Toma el bloque más largo de cada valor: si a los centros de esos dos
+bloques no les llega el valor contrario, todo algoritmo que solo decide valores que
+vio termina en desacuerdo. Desde `d` brincos, la información no llega en `r` rondas
+con probabilidad `P(Bin(r, p) < d)`; la cota es el producto de los cuatro lados.
+
+Con un sorteo por arista dirigida ese producto es la probabilidad exacta del
+evento. En red no dirigida y en broadcast los sorteos se comparten, los cuatro
+fallos se favorecen entre sí y el producto queda por debajo: sigue siendo cota.
+`smoke_ui.py` comprueba las dos cosas con los sorteos del motor.
+
+No vale para AMP: decide `agreed`, que no es un valor de la entrada.
 
 ## Todo lo que cambió respecto a `api.py`
 

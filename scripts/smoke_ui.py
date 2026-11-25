@@ -861,6 +861,58 @@ original, _ = curva_exacta(red([0, 2.5, 7], [(0, 1), (1, 2)]), "fv", {}, "por_ar
 comprobar(copia == original, "la copia editable de FV trae su `esperanza` y da la misma curva exacta")
 ALGORITMOS.pop(usuario.CLAVE, None)
 
+print("\nLa cota inferior por validez, en ciclos")
+from math import comb  # noqa: E402
+
+from simulation.barrido import who_gets_message_batch  # noqa: E402
+from simulation.ronda import get_adj  # noqa: E402
+from simulation.teoria import cota_validez  # noqa: E402
+
+
+def anillo(valores, dirigida=False):
+    n = len(valores)
+    return red(valores, [(i, (i + 1) % n) for i in range(n)] + ([((i + 1) % n, i) for i in range(n)] if dirigida else []),
+               dirigida)
+
+
+def menos_de(r, p, d):  # P(Bin(r, p) < d)
+    return sum(comb(r, k) * p**k * (1 - p) ** (r - k) for k in range(d))
+
+
+cota, _ = cota_validez(anillo([0] * 5 + [1] * 5), 5, P)
+comprobar(np.allclose(cota, menos_de(5, P, 3) ** 4), "10 nodos, mitad y mitad, 5 rondas: P(Bin(5, p) < 3)^4")
+cota, _ = cota_validez(anillo([1, 1, 0, 0, 0, 0, 1, 1, 1]), 4, P)  # el bloque de 1 cruza el inicio de la lista
+comprobar(np.allclose(cota, menos_de(4, P, 3) * menos_de(4, P, 2) * menos_de(4, P, 3) ** 2),
+          "9 nodos, bloques de 4 y 5: cada bloque con sus dos distancias")
+for nombre, grafo_, pista in [
+    ("un camino", red([0, 1, 1], [(0, 1), (1, 2)], False), "ciclo"),
+    ("dos triángulos", red([0, 1, 1, 0, 1, 1], [(0, 1), (1, 2), (2, 0), (3, 4), (4, 5), (5, 3)], False), "ciclo"),
+    ("un anillo de un solo sentido", red([0, 1, 1], [(0, 1), (1, 2), (2, 0)]), "ciclo"),
+    ("una entrada unánime", anillo([1, 1, 1, 1]), "ceros y unos"),
+    ("valores que no son 0 y 1", anillo([0, 0.5, 1, 1]), "ceros y unos"),
+]:
+    cota, motivo = cota_validez(grafo_, 2, P)
+    comprobar(cota is None and pista in motivo, f"sin cota para {nombre}, y lo dice: {motivo!r}")
+# El evento que la cota cuenta (a ningún centro le llega el valor contrario), con los
+# sorteos del motor: exacto con un sorteo por arista dirigida, por encima con los demás.
+np.random.seed(4)
+entrada = np.array([0, 0, 0, 0, 1, 1, 1, 1])
+for dirigida in (True, False):
+    for modo in ("por_arista", "por_emisor"):
+        grafo_ = anillo(list(entrada), dirigida)
+        adj = (get_adj(grafo_) > 0).astype(float)
+        sabe0, sabe1 = np.tile(entrada == 0, (40000, 1)), np.tile(entrada == 1, (40000, 1))
+        for _ in range(4):
+            fired = who_gets_message_batch(adj * 0.5, adj, dirigida, 40000, modo)
+            sabe0, sabe1 = sabe0 | (fired & sabe0[:, :, None]).any(axis=1), sabe1 | (fired & sabe1[:, :, None]).any(axis=1)
+        evento = (~sabe0[:, 5] & ~sabe1[:, 1]).mean()  # centros: el nodo 5 (bloque de 1) y el 1 (bloque de 0)
+        cota = cota_validez(grafo_, 4, [0.5])[0][0]
+        z = (evento - cota) / np.sqrt(cota * (1 - cota) / 40000)
+        exacto = dirigida and modo == "por_arista"
+        comprobar(abs(z) < 4 if exacto else z > -4,
+                  f"{'dirigida' if dirigida else 'no dirigida'}, {modo}: el evento ({evento:.4f}) "
+                  f"{'coincide con' if exacto else 'no baja de'} la cota ({cota:.4f})")
+
 print("\nEl desglose: las simulaciones del sweep, una por una")
 from simulation.barrido import simulacion_del_sweep  # noqa: E402
 
@@ -1034,6 +1086,18 @@ comprobar((dibujadas("chart-mean-line"), dibujadas("chart-theory-line"), dibujad
 app.on_curve_toggle(casilla("data-curva", "ic", False))
 comprobar(dibujadas("chart-confidence-band") == 0 and dibujadas("chart-mean-line") == 1, "la casilla del IC quita las bandas")
 app.STATE.hidden_curves.clear()
+
+# La cota inferior llega en el mismo mensaje que la teórica y se dibuja una sola vez.
+comprobar(dibujadas("chart-theory-line chart-bound-line") == 0 and 'data-curva="cota"' not in leyenda,
+          "sin cota (la red no es un ciclo) no hay ni línea ni casilla")
+creados[-1]._entregar({"type": "teorica", "valores": teo, "motivo": motivo, "cota": [0.25] * len(teo)})
+comprobar(dibujadas("chart-theory-line chart-bound-line") == 1
+          and 'data-curva="cota" checked' in DOCUMENTO.getElementById("chart-toggles").innerHTML,
+          "con cota, la gráfica trae su línea y la leyenda su casilla")
+app.on_curve_toggle(casilla("data-curva", "cota", False))
+comprobar(dibujadas("chart-theory-line chart-bound-line") == 0, "despalomearla la quita")
+app.STATE.hidden_curves.clear()
+creados[-1]._entregar({"type": "teorica", "valores": teo, "motivo": motivo})
 
 comprobar(app.STATE.detail_algorithm == "fv" and not DOCUMENTO.getElementById("detail-picker").hidden,
           "con dos algoritmos aparece el selector de detalle, en el primero")
